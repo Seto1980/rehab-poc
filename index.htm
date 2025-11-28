@@ -10,6 +10,9 @@
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: "Helvetica Neue", Arial, sans-serif; }
         
+        /* エラーログ */
+        #debug-log { display: none; }
+
         /* 背景レイヤー */
         canvas#output_canvas { 
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
@@ -45,7 +48,7 @@
         /* スタート画面 */
         #start-screen {
             pointer-events: auto; text-align: center;
-            background: rgba(0, 0, 0, 0.8); padding: 30px; border-radius: 20px;
+            background: rgba(0, 0, 0, 0.85); padding: 30px; border-radius: 20px;
             border: 1px solid #555; backdrop-filter: blur(5px);
             width: 85%; max-width: 350px;
         }
@@ -63,22 +66,24 @@
             padding: 10px 0; width: 100%; border-radius: 50px; cursor: pointer; font-size: 14px;
         }
 
-        /* 説明書モーダル (New!) */
+        /* 説明書モーダル */
         #manual-modal {
             display: none; pointer-events: auto; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 9999; overflow-y: auto;
+            background: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto; -webkit-overflow-scrolling: touch;
         }
         .manual-content {
-            background: #1a1a1a; margin: 20px auto; padding: 25px; width: 85%; max-width: 500px;
-            border-radius: 15px; border: 1px solid #444; color: #eee;
+            background: #1a1a1a; margin: 20px auto; padding: 25px; width: 85%; max-width: 600px;
+            border-radius: 15px; border: 1px solid #444; color: #eee; padding-bottom: 50px;
         }
-        .manual-title { font-size: 22px; color: #00ffcc; border-bottom: 2px solid #00ffcc; padding-bottom: 10px; margin-bottom: 15px; }
-        .manual-sec { margin-bottom: 20px; }
-        .manual-h3 { font-size: 16px; color: #fff; font-weight: bold; margin-bottom: 5px; }
-        .manual-p { font-size: 14px; line-height: 1.6; color: #ccc; }
+        .manual-title { font-size: 22px; color: #00ffcc; border-bottom: 2px solid #00ffcc; padding-bottom: 10px; margin-bottom: 20px; font-weight: bold; }
+        .manual-sec { margin-bottom: 25px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .manual-h3 { font-size: 18px; color: #fff; font-weight: bold; margin-bottom: 8px; border-left: 4px solid #00ffcc; padding-left: 10px; }
+        .manual-p { font-size: 14px; line-height: 1.8; color: #ccc; margin-left: 10px; }
+        .manual-list { font-size: 14px; line-height: 1.8; color: #ccc; margin-left: 20px; }
+        .manual-highlight { color: #ffcc00; font-weight: bold; }
         .close-manual {
-            background: #00ffcc; color: #000; border: none; padding: 10px 30px;
-            font-weight: bold; border-radius: 20px; cursor: pointer; display: block; margin: 0 auto;
+            background: #00ffcc; color: #000; border: none; padding: 12px 40px;
+            font-weight: bold; border-radius: 30px; cursor: pointer; display: block; margin: 30px auto; font-size: 16px;
         }
 
         /* カウントダウン & 計測中 */
@@ -88,7 +93,7 @@
         .rec-label { color: #ff3366; font-weight: bold; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0.5; } }
 
-        /* 結果画面 (詳細版) */
+        /* 結果画面 */
         #result-ui {
             display: none; pointer-events: auto; background: rgba(15, 15, 15, 0.98);
             padding: 20px; border-radius: 15px; border: 2px solid #00ffcc;
@@ -96,9 +101,9 @@
         }
         .res-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
         .res-item { background: #222; padding: 10px; border-radius: 10px; text-align: center; }
-        .res-label { font-size: 12px; color: #aaa; margin-bottom: 5px; }
-        .res-val { font-size: 24px; font-weight: bold; color: #fff; }
-        .res-unit { font-size: 12px; color: #888; }
+        .res-label { font-size: 11px; color: #aaa; margin-bottom: 5px; text-transform: uppercase; }
+        .res-val { font-size: 22px; font-weight: bold; color: #fff; }
+        .res-unit { font-size: 11px; color: #888; }
         
         .main-score-box { text-align: center; padding-bottom: 15px; border-bottom: 1px solid #444; }
         .main-score-val { font-size: 50px; font-weight: bold; color: #00ffcc; }
@@ -117,32 +122,51 @@
 
     <div id="manual-modal">
         <div class="manual-content">
-            <div class="manual-title">📘 アプリの使い方</div>
+            <div class="manual-title">📘 アプリの使い方と解説</div>
             
             <div class="manual-sec">
-                <div class="manual-h3">1. 目的</div>
-                <div class="manual-p">このアプリは、目に見えない「運動のエネルギー」を可視化します。作業療法士(OT)監修のもと、リハビリやトレーニングの成果を数値で確認するために作られました。</div>
-            </div>
-
-            <div class="manual-sec">
-                <div class="manual-h3">2. 準備すること</div>
+                <div class="manual-h3">1. アプリの特徴 (Merit)</div>
                 <div class="manual-p">
-                    ✅ <strong>スマホを立てる:</strong> 1.5〜2メートル離れてください。<br>
-                    ✅ <strong>全身を映す:</strong> 画面の中心に体が来るように座ってください。<br>
-                    ✅ <strong>腕を選ぶ:</strong> 画面上のボタンで計測する腕を選んでください。
+                    このアプリは、スマホのカメラを使ってあなたの動きを解析します。<br>
+                    最大の特徴は<strong>「奥行き（手前・奥）」の動きも計算できること</strong>です。普通のビデオ録画とは違い、AIが空間を認識するため、リーチ動作などの立体的な運動量を測ることができます。
                 </div>
             </div>
 
             <div class="manual-sec">
-                <div class="manual-h3">3. どんな時に使う？</div>
+                <div class="manual-h3">2. 計測結果の見方</div>
                 <div class="manual-p">
-                    ・リーチ動作（手を伸ばす）の練習に。<br>
-                    ・「今日は調子が良いかな？」のチェックに。<br>
-                    ・左右の動きの違いを比べる時に。
+                    計測後に表示される4つの数字の意味です。
+                </div>
+                <ul class="manual-list">
+                    <li><strong>MAX SPEED (瞬発力):</strong><br>動き出しの速さです。「麻痺側の動き出しが遅れていないか？」「健側と同じ速度が出せるか？」のチェックに使います。</li>
+                    <li><strong>DISTANCE (移動距離):</strong><br>手が動いた合計の距離です。同じ10秒間でも、この数値が大きいほど「休みなく動けた（持久力・反復性がある）」ことになります。</li>
+                    <li><strong>ACTIVITY (回数):</strong><br>「行って戻る」などの動作が何回できたかカウントします。</li>
+                    <li><strong>TOTAL WORK (総運動量):</strong><br>運動の「強さ」と「量」の合計スコアです。</li>
+                </ul>
+            </div>
+
+            <div class="manual-sec">
+                <div class="manual-h3">3. エネルギーの算出方法</div>
+                <div class="manual-p">
+                    物理の公式（運動エネルギー $K = 1/2mv^2$）を応用しています。<br>
+                    カメラから得られた「手の速さ」を積み上げることで、どれくらい腕が仕事をしたかを推定しています。<br>
+                    ※腕の重さは全員一律として計算しているため、他人との比較ではなく<strong>「自分の左右差」</strong>や<strong>「過去の自分」</strong>との比較に使ってください。
                 </div>
             </div>
 
-            <button class="close-manual" onclick="toggleManual(false)">閉じる</button>
+            <div class="manual-sec">
+                <div class="manual-h3">⚠️ アプリの限界・注意点</div>
+                <div class="manual-p">
+                    このアプリは簡易測定ツールであり、医療機器ではありません。以下の特性を理解してご使用ください。
+                </div>
+                <ul class="manual-list">
+                    <li><span class="manual-highlight">スマホの性能に依存します:</span><br>古い機種やバッテリー低下時は、処理が遅れ、数値が低く出ることがあります。</li>
+                    <li><span class="manual-highlight">指先は見ていません:</span><br>「手首」の位置を追跡しています。指先の細かい動き（つまむ等）はエネルギーに含まれません。</li>
+                    <li><span class="manual-highlight">奥行きは「推定値」です:</span><br>AIが画像から推測した距離です。実際のメジャーで測った距離とは誤差が生じます（左右の比較には十分使えます）。</li>
+                </ul>
+            </div>
+
+            <button class="close-manual" onclick="toggleManual(false)">閉じて計測へ</button>
         </div>
     </div>
 
@@ -170,19 +194,19 @@
             
             <div class="res-grid">
                 <div class="res-item">
-                    <div class="res-label">MAX SPEED</div>
+                    <div class="res-label">MAX SPEED (瞬発力)</div>
                     <div class="res-val" id="res-max-speed">0.0</div>
                     <div class="res-unit">m/s</div>
                 </div>
                 <div class="res-item">
-                    <div class="res-label">DISTANCE</div>
+                    <div class="res-label">DISTANCE (距離)</div>
                     <div class="res-val" id="res-dist">0.0</div>
                     <div class="res-unit">meters</div>
                 </div>
                 <div class="res-item">
-                    <div class="res-label">ACTIVITY</div>
+                    <div class="res-label">ACTIVITY (回数)</div>
                     <div class="res-val" id="res-count">0</div>
-                    <div class="res-unit">movements</div>
+                    <div class="res-unit">reps</div>
                 </div>
                 <div class="res-item">
                     <div class="res-label">QUALITY</div>
@@ -321,10 +345,10 @@
 
             // 簡易フィードバックロジック
             let comment = "Good Effort!";
-            if(sessionData.maxSpeed > 2.0) comment = "Very Dynamic!";
-            else if(sessionData.totalDistance > 5.0) comment = "High Endurance!";
-            else if(sessionData.moveCount > 5) comment = "Good Reps!";
-            else if(sessionData.totalEnergy < 10) comment = "Keep Trying!";
+            if(sessionData.maxSpeed > 2.0) comment = "Dynamic Speed!";
+            else if(sessionData.totalDistance > 5.0) comment = "Great Endurance!";
+            else if(sessionData.moveCount > 5) comment = "Nice Reps!";
+            else if(sessionData.totalEnergy < 10) comment = "Keep Going!";
             
             document.getElementById('res-comment').innerText = comment;
         }
