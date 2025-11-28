@@ -2,34 +2,53 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rehab-Vis 3D PoC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Rehab-Vis 3D Trail</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { font-family: sans-serif; background: #222; color: #fff; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
-        .container { position: relative; width: 100%; max-width: 640px; }
-        video { display: none; }
-        canvas { width: 100%; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .metrics { margin-top: 20px; padding: 15px; background: #333; border-radius: 8px; width: 100%; max-width: 600px; font-family: monospace; font-size: 1.1em; }
-        .metric-row { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding: 5px 0; }
+        /* 全画面表示用の設定 */
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+        .container { position: relative; width: 100vw; height: 100vh; }
+        
+        /* カメラ映像（Canvas）を画面いっぱいに */
+        canvas { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            object-fit: cover; /* 画面を埋め尽くす */
+            transform: scaleX(-1); /* 鏡のように反転 */
+        }
+
+        /* 数値データ（左上に重ねて表示） */
+        .metrics { 
+            position: absolute; 
+            top: 10px; left: 10px; 
+            background: rgba(0, 0, 0, 0.6); 
+            color: #fff; 
+            padding: 10px; 
+            border-radius: 8px; 
+            font-family: monospace; 
+            font-size: 14px;
+            pointer-events: none; /* タップを邪魔しない */
+            z-index: 10;
+        }
+        .metric-row { margin-bottom: 4px; }
         .highlight { color: #00ffcc; font-weight: bold; }
-        .warning { color: #ffcc00; font-size: 0.8em; margin-top: 10px;}
     </style>
 </head>
 <body>
-    <h2>Rehab-Vis 3D: 技術検証</h2>
+
     <div class="container">
-        <video id="input_video"></video>
-        <canvas id="output_canvas" width="640" height="480"></canvas>
+        <video id="input_video" style="display:none"></video>
+        <canvas id="output_canvas"></canvas>
+        
+        <div class="metrics">
+            <div class="metric-row">Velocity: <span id="velocity-val" class="highlight">0.0</span> m/s</div>
+            <div class="metric-row">Energy  : <span id="energy-val" class="highlight">0.0</span> K</div>
+            <div class="metric-row">Depth(Z): <span id="z-val">0.0</span> m</div>
+        </div>
     </div>
-    <div class="metrics">
-        <div class="metric-row">右手 速度 (m/s): <span id="velocity-val" class="highlight">0.00</span></div>
-        <div class="metric-row">推定エネルギー (K): <span id="energy-val" class="highlight">0.00</span></div>
-        <div class="metric-row">Z座標 (奥行き): <span id="z-val">0.00</span></div>
-        <div class="metric-row">ステータス: <span id="status-val">カメラ準備中...</span></div>
-    </div>
-    <div class="warning">※Z座標はカメラに手を近づけるとマイナス、離すとプラスになります。</div>
 
     <script>
         const videoElement = document.getElementById('input_video');
@@ -38,46 +57,109 @@
         const velocityDisplay = document.getElementById('velocity-val');
         const energyDisplay = document.getElementById('energy-val');
         const zDisplay = document.getElementById('z-val');
-        const statusDisplay = document.getElementById('status-val');
 
         let lastTime = 0;
         let lastWrist = null;
-        const SMOOTHING = 0.5;
+        const SMOOTHING = 0.6; // 補正強度
+        
+        // 軌跡を描くための履歴配列
+        let pathHistory = []; 
+        const MAX_PATH_LENGTH = 30; // 軌跡の長さ
+
+        function resizeCanvas() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         function onResults(results) {
-            statusDisplay.innerText = "計測中";
+            // 1. 映像の描画
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
+            // 2. データの取得と計算
             if (results.poseWorldLandmarks && results.poseWorldLandmarks[16]) {
-                const wrist = results.poseWorldLandmarks[16];
-                
-                // 簡易描画
-                if(results.poseLandmarks){
-                    const drawWrist = results.poseLandmarks[16];
-                    canvasCtx.beginPath();
-                    canvasCtx.arc(drawWrist.x * canvasElement.width, drawWrist.y * canvasElement.height, 10, 0, 2 * Math.PI);
-                    canvasCtx.fillStyle = "#00ffcc";
-                    canvasCtx.fill();
-                }
+                const wristWorld = results.poseWorldLandmarks[16]; // 3D計算用
+                const wristScreen = results.poseLandmarks[16];     // 描画用(0-1)
 
                 const currentTime = Date.now();
+                let velocity = 0;
+                let energy = 0;
+
                 if (lastWrist && lastTime > 0) {
                     const deltaTime = (currentTime - lastTime) / 1000;
-                    const distance = Math.sqrt(Math.pow(wrist.x - lastWrist.x, 2) + Math.pow(wrist.y - lastWrist.y, 2) + Math.pow(wrist.z - lastWrist.z, 2));
-                    const velocity = distance / deltaTime;
-
-                    if(velocity < 10) { 
-                        const energy = 0.5 * 1.0 * Math.pow(velocity, 2);
-                        velocityDisplay.innerText = velocity.toFixed(2);
-                        energyDisplay.innerText = energy.toFixed(2);
-                        zDisplay.innerText = wrist.z.toFixed(2);
+                    if (deltaTime > 0) {
+                        const distance = Math.sqrt(
+                            Math.pow(wristWorld.x - lastWrist.x, 2) +
+                            Math.pow(wristWorld.y - lastWrist.y, 2) +
+                            Math.pow(wristWorld.z - lastWrist.z, 2)
+                        );
+                        velocity = distance / deltaTime;
+                        // ノイズ除去（超高速な移動は無視）
+                        if(velocity < 15) {
+                            energy = 0.5 * 1.0 * Math.pow(velocity, 2);
+                        } else {
+                            velocity = 0; energy = 0; // エラー値対策
+                        }
                     }
                 }
+
+                // 表示更新
+                velocityDisplay.innerText = velocity.toFixed(2);
+                energyDisplay.innerText = energy.toFixed(1);
+                zDisplay.innerText = wristWorld.z.toFixed(2);
+
+                // 3. 軌跡の保存と描画
+                // 描画座標に変換
+                const px = wristScreen.x * canvasElement.width;
+                const py = wristScreen.y * canvasElement.height;
+
+                // 配列の先頭に追加
+                pathHistory.unshift({ x: px, y: py, energy: energy });
+                // 古い履歴を削除
+                if (pathHistory.length > MAX_PATH_LENGTH) pathHistory.pop();
+
+                // 軌跡を描画
+                if (pathHistory.length > 1) {
+                    canvasCtx.lineWidth = 6;
+                    canvasCtx.lineCap = 'round';
+                    
+                    for (let i = 0; i < pathHistory.length - 1; i++) {
+                        const pt1 = pathHistory[i];
+                        const pt2 = pathHistory[i+1];
+                        
+                        canvasCtx.beginPath();
+                        canvasCtx.moveTo(pt1.x, pt1.y);
+                        canvasCtx.lineTo(pt2.x, pt2.y);
+                        
+                        // エネルギーに応じて色を変える (遅い=青, 速い=赤)
+                        const intensity = Math.min(pt1.energy / 5.0, 1.0); // 0〜1に正規化
+                        const r = Math.floor(255 * intensity);
+                        const b = Math.floor(255 * (1 - intensity));
+                        canvasCtx.strokeStyle = `rgba(${r}, 50, ${b}, ${1 - i/MAX_PATH_LENGTH})`; // 古いほど透明に
+                        
+                        canvasCtx.stroke();
+                    }
+                }
+
+                // 現在地（手首）に点を打つ
+                canvasCtx.beginPath();
+                canvasCtx.arc(px, py, 10, 0, 2 * Math.PI);
+                canvasCtx.fillStyle = "#fff";
+                canvasCtx.fill();
+
+                // データ更新
                 if(lastWrist) {
-                    lastWrist = { x: lastWrist.x * SMOOTHING + wrist.x * (1 - SMOOTHING), y: lastWrist.y * SMOOTHING + wrist.y * (1 - SMOOTHING), z: lastWrist.z * SMOOTHING + wrist.z * (1 - SMOOTHING) };
-                } else { lastWrist = { x: wrist.x, y: wrist.y, z: wrist.z }; }
+                    lastWrist = {
+                        x: lastWrist.x * SMOOTHING + wristWorld.x * (1 - SMOOTHING),
+                        y: lastWrist.y * SMOOTHING + wristWorld.y * (1 - SMOOTHING),
+                        z: lastWrist.z * SMOOTHING + wristWorld.z * (1 - SMOOTHING)
+                    };
+                } else {
+                    lastWrist = { x: wristWorld.x, y: wristWorld.y, z: wristWorld.z };
+                }
                 lastTime = currentTime;
             }
             canvasCtx.restore();
@@ -87,7 +169,7 @@
         pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         pose.onResults(onResults);
 
-        const camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 640, height: 480 });
+        const camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 1280, height: 720 });
         camera.start();
     </script>
 </body>
