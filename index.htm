@@ -3,18 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Rehab-Vis 3D Switch</title>
+    <title>Rehab-Vis 3D Repair</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         
+        /* エラー表示エリア（最前面） */
+        #debug-log {
+            position: fixed; top: 10%; left: 5%; width: 90%;
+            background: rgba(255, 0, 0, 0.9); color: white; padding: 15px;
+            border-radius: 10px; z-index: 9999; display: none; font-size: 14px;
+            word-wrap: break-word; border: 2px solid white;
+        }
+
+        /* 左右切り替えスイッチ（最前面） */
+        .hand-switch-container {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 5000; /* 確実に押せるように数値を大きく */
+            background: rgba(0,0,0,0.8); padding: 5px; border-radius: 30px;
+            display: flex; gap: 10px; border: 1px solid #555;
+            pointer-events: auto;
+        }
+        .hand-btn {
+            background: transparent; border: none; color: #aaa;
+            padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 20px;
+            font-size: 14px;
+        }
+        .hand-btn.active { background: #00ffcc; color: #000; }
+
+        /* スタートボタン等のUI層 */
+        .ui-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 4000; pointer-events: none;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #start-btn {
+            pointer-events: auto;
+            background: #00ffcc; color: #000; border: none; padding: 20px 50px;
+            font-size: 24px; font-weight: bold; border-radius: 50px;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5); cursor: pointer;
+        }
+
+        /* カメラとグラフ（背面） */
         canvas#output_canvas { 
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
             object-fit: cover; transform: scaleX(-1); z-index: 1;
         }
-
         .graph-wrapper {
             position: fixed; bottom: 0; left: 0; right: 0; height: 25vh;
             background: rgba(0, 0, 0, 0.8); border-top: 1px solid #444;
@@ -22,64 +58,36 @@
         }
         #chart_canvas { width: 100%; height: 100%; }
 
-        .ui-layer {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 20; pointer-events: none;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-
-        /* 左右切り替えスイッチ */
-        .hand-switch-container {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 30; pointer-events: auto;
-            background: rgba(0,0,0,0.5); padding: 5px; border-radius: 30px;
-            display: flex; gap: 10px; border: 1px solid #555;
-        }
-        .hand-btn {
-            background: transparent; border: none; color: #aaa;
-            padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 20px;
-            transition: 0.3s;
-        }
-        .hand-btn.active { background: #00ffcc; color: #000; box-shadow: 0 0 10px rgba(0,255,204,0.5); }
-
-        #start-btn {
-            pointer-events: auto; background: #00ffcc; color: #000;
-            border: none; padding: 20px 50px; font-size: 24px; font-weight: bold; border-radius: 50px;
-            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5); cursor: pointer;
-        }
-        
-        #recording-ui { display: none; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
-        .timer { font-size: 80px; color: #fff; font-weight: bold; }
-        .status { color: #ff3366; font-size: 20px; font-weight: bold; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
-
-        #result-ui {
-            display: none; pointer-events: auto; background: rgba(20, 20, 20, 0.95);
-            padding: 40px; border-radius: 20px; border: 2px solid #00ffcc;
-            text-align: center; color: #fff; width: 80%; max-width: 400px;
-        }
-        .score-val { font-size: 56px; font-weight: bold; color: #00ffcc; margin: 10px 0; }
-        .retry-btn { background: #444; color: #fff; border: 1px solid #fff; margin-top: 20px; padding: 12px 40px; border-radius: 30px; }
+        /* 計測・結果画面 */
+        #recording-ui, #result-ui { pointer-events: auto; display: none; text-align: center; color: #fff; }
+        .timer { font-size: 80px; font-weight: bold; text-shadow: 0 2px 5px #000; }
+        #result-ui { background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 20px; border: 2px solid #00ffcc; }
+        .score-val { font-size: 50px; color: #00ffcc; font-weight: bold; }
+        .retry-btn { background: #444; color: #fff; padding: 10px 30px; margin-top: 20px; border-radius: 20px; border: 1px solid #fff; }
     </style>
 </head>
 <body>
-    <video id="input_video" style="display:none"></video>
+    
+    <div id="debug-log"></div>
+
+    <video id="input_video" style="display:none" autoplay playsinline></video>
 
     <div class="hand-switch-container">
-        <button class="hand-btn" id="btn-left" onclick="setHand('left')">LEFT ARM</button>
-        <button class="hand-btn active" id="btn-right" onclick="setHand('right')">RIGHT ARM</button>
+        <button class="hand-btn" id="btn-left" onclick="setHand('left')">LEFT</button>
+        <button class="hand-btn active" id="btn-right" onclick="setHand('right')">RIGHT</button>
     </div>
 
     <div class="ui-layer">
         <button id="start-btn" onclick="startMeasurement()">START</button>
+        
         <div id="recording-ui">
-            <div class="status">● RECORDING</div>
+            <div style="color:#ff3366; font-weight:bold">● RECORDING</div>
             <div class="timer" id="timer-val">10.0</div>
         </div>
+
         <div id="result-ui">
-            <div style="font-size:14px; color:#aaa">TOTAL ENERGY</div>
+            <div>TOTAL ENERGY</div>
             <div class="score-val" id="total-score">0.0</div>
-            <div style="font-size:14px; color:#aaa">Joules (approx)</div>
             <button class="retry-btn" onclick="resetApp()">RETRY</button>
         </div>
     </div>
@@ -88,22 +96,27 @@
     <div class="graph-wrapper"><canvas id="chart_canvas"></canvas></div>
 
     <script>
+        // --- エラー監視機能 ---
+        const debugLog = document.getElementById('debug-log');
+        window.onerror = function(msg, url, line) {
+            debugLog.style.display = 'block';
+            debugLog.innerHTML += `⚠️ Error: ${msg} (Line:${line})<br>`;
+        };
+
         // --- 設定変数 ---
-        // MediaPipeのランドマークID: 左手首=15, 右手首=16
-        let targetIndex = 16; 
+        let targetIndex = 16; // 右手(16) デフォルト
         
         function setHand(side) {
-            // 見た目の切り替え
-            document.getElementById('btn-left').classList.remove('active');
-            document.getElementById('btn-right').classList.remove('active');
-            document.getElementById(`btn-${side}`).classList.add('active');
-
-            // ターゲット変更
-            if(side === 'left') targetIndex = 15;
-            else targetIndex = 16;
-            
-            // グラフなどをリセット
-            resetApp();
+            try {
+                document.getElementById('btn-left').classList.remove('active');
+                document.getElementById('btn-right').classList.remove('active');
+                document.getElementById(`btn-${side}`).classList.add('active');
+                
+                if(side === 'left') targetIndex = 15;
+                else targetIndex = 16;
+                
+                resetApp();
+            } catch(e) { console.error(e); }
         }
 
         // --- アプリ変数 ---
@@ -115,10 +128,127 @@
         let lastWrist = null;
         let pathHistory = [];
 
-        // UI要素
+        // UI要素取得
         const startBtn = document.getElementById('start-btn');
         const recUI = document.getElementById('recording-ui');
         const resUI = document.getElementById('result-ui');
         const timerDisplay = document.getElementById('timer-val');
         const scoreDisplay = document.getElementById('total-score');
-        const canvasElement = document.getElementById('
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const videoElement = document.getElementById('input_video');
+
+        // サイズ調整
+        function resizeCanvas() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Chart.js 安全初期化
+        let energyChart = null;
+        try {
+            const ctxChart = document.getElementById('chart_canvas').getContext('2d');
+            energyChart = new Chart(ctxChart, {
+                type: 'line',
+                data: {
+                    labels: Array(50).fill(''),
+                    datasets: [{ data: Array(50).fill(0), borderColor: '#00ffcc', backgroundColor: 'rgba(0, 255, 204, 0.2)', borderWidth: 2, tension: 0.3, fill: true, pointRadius: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { display: false, suggestedMax: 10 }, x: { display: false } }, plugins: { legend: { display: false } } }
+            });
+        } catch(e) { console.warn("Chart init error", e); }
+
+        function startMeasurement() {
+            isRecording = true; totalEnergy = 0; timeLeft = 10.0;
+            startBtn.style.display = 'none'; resUI.style.display = 'none'; recUI.style.display = 'block';
+            if(timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft -= 0.1;
+                if(timeLeft < 0) timeLeft = 0;
+                timerDisplay.innerText = timeLeft.toFixed(1);
+                if(timeLeft <= 0) stopMeasurement();
+            }, 100);
+        }
+
+        function stopMeasurement() {
+            isRecording = false; clearInterval(timerInterval);
+            recUI.style.display = 'none'; resUI.style.display = 'block';
+            scoreDisplay.innerText = totalEnergy.toFixed(1);
+        }
+
+        function resetApp() {
+            resUI.style.display = 'none'; startBtn.style.display = 'block';
+            pathHistory = [];
+            if(energyChart) { energyChart.data.datasets[0].data = Array(50).fill(0); energyChart.update(); }
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseWorldLandmarks && results.poseWorldLandmarks[targetIndex]) {
+                const wristWorld = results.poseWorldLandmarks[targetIndex];
+                const wristScreen = results.poseLandmarks[targetIndex];
+                const currentTime = Date.now();
+                let currentEnergy = 0;
+
+                if (lastWrist && lastTime > 0) {
+                    const deltaTime = (currentTime - lastTime) / 1000;
+                    if (deltaTime > 0) {
+                        const dist = Math.sqrt(
+                            Math.pow(wristWorld.x - lastWrist.x, 2) +
+                            Math.pow(wristWorld.y - lastWrist.y, 2) +
+                            Math.pow(wristWorld.z - lastWrist.z, 2)
+                        );
+                        const v = dist / deltaTime;
+                        if(v < 15) currentEnergy = 0.5 * Math.pow(v, 2);
+                    }
+                }
+
+                if(isRecording) totalEnergy += currentEnergy;
+
+                if(energyChart) {
+                    const data = energyChart.data.datasets[0].data;
+                    data.shift(); data.push(currentEnergy);
+                    energyChart.update();
+                }
+
+                const px = wristScreen.x * canvasElement.width;
+                const py = wristScreen.y * canvasElement.height;
+                pathHistory.unshift({ x: px, y: py, energy: currentEnergy });
+                if (pathHistory.length > 20) pathHistory.pop();
+
+                if (pathHistory.length > 1) {
+                    canvasCtx.lineWidth = 5; canvasCtx.lineCap = 'round';
+                    for (let i = 0; i < pathHistory.length - 1; i++) {
+                        const pt1 = pathHistory[i]; const pt2 = pathHistory[i+1];
+                        canvasCtx.beginPath(); canvasCtx.moveTo(pt1.x, pt1.y); canvasCtx.lineTo(pt2.x, pt2.y);
+                        const intensity = Math.min(pt1.energy / 5.0, 1.0);
+                        const r = Math.floor(255 * intensity); const b = Math.floor(255 * (1 - intensity));
+                        canvasCtx.strokeStyle = `rgba(${r}, 100, ${b}, ${1 - i/20})`;
+                        canvasCtx.stroke();
+                    }
+                }
+                
+                canvasCtx.beginPath(); canvasCtx.arc(px, py, 10, 0, 2 * Math.PI);
+                canvasCtx.fillStyle = "#fff"; canvasCtx.fill();
+
+                lastWrist = wristWorld;
+                lastTime = currentTime;
+            }
+            canvasCtx.restore();
+        }
+
+        // MediaPipe Init
+        const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        pose.onResults(onResults);
+        
+        const camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 640, height: 480 });
+        camera.start();
+    </script>
+</body>
+</html>
