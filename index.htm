@@ -3,92 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Rehab-Vis 3D Repair</title>
+    <title>Rehab-Vis 3D Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: "Helvetica Neue", Arial, sans-serif; }
         
-        /* エラー表示エリア（最前面） */
-        #debug-log {
-            position: fixed; top: 10%; left: 5%; width: 90%;
-            background: rgba(255, 0, 0, 0.9); color: white; padding: 15px;
-            border-radius: 10px; z-index: 9999; display: none; font-size: 14px;
-            word-wrap: break-word; border: 2px solid white;
-        }
-
-        /* 左右切り替えスイッチ（最前面） */
-        .hand-switch-container {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 5000; /* 確実に押せるように数値を大きく */
-            background: rgba(0,0,0,0.8); padding: 5px; border-radius: 30px;
-            display: flex; gap: 10px; border: 1px solid #555;
-            pointer-events: auto;
-        }
-        .hand-btn {
-            background: transparent; border: none; color: #aaa;
-            padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 20px;
-            font-size: 14px;
-        }
-        .hand-btn.active { background: #00ffcc; color: #000; }
-
-        /* スタートボタン等のUI層 */
-        .ui-layer {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 4000; pointer-events: none;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        #start-btn {
-            pointer-events: auto;
-            background: #00ffcc; color: #000; border: none; padding: 20px 50px;
-            font-size: 24px; font-weight: bold; border-radius: 50px;
-            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5); cursor: pointer;
-        }
-
-        /* カメラとグラフ（背面） */
+        /* 背景レイヤー */
         canvas#output_canvas { 
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
             object-fit: cover; transform: scaleX(-1); z-index: 1;
         }
         .graph-wrapper {
             position: fixed; bottom: 0; left: 0; right: 0; height: 25vh;
-            background: rgba(0, 0, 0, 0.8); border-top: 1px solid #444;
+            background: rgba(0, 0, 0, 0.85); border-top: 1px solid #444;
             padding: 10px; box-sizing: border-box; z-index: 10;
         }
         #chart_canvas { width: 100%; height: 100%; }
 
-        /* 計測・結果画面 */
-        #recording-ui, #result-ui { pointer-events: auto; display: none; text-align: center; color: #fff; }
-        .timer { font-size: 80px; font-weight: bold; text-shadow: 0 2px 5px #000; }
-        #result-ui { background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 20px; border: 2px solid #00ffcc; }
-        .score-val { font-size: 50px; color: #00ffcc; font-weight: bold; }
-        .retry-btn { background: #444; color: #fff; padding: 10px 30px; margin-top: 20px; border-radius: 20px; border: 1px solid #fff; }
+        /* UIレイヤー */
+        .ui-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5000; pointer-events: none;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        /* 左右スイッチ */
+        .hand-switch-container {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 6000; pointer-events: auto;
+            background: rgba(0,0,0,0.6); padding: 5px; border-radius: 30px;
+            display: flex; gap: 10px; border: 1px solid #666;
+        }
+        .hand-btn {
+            background: transparent; border: none; color: #ccc;
+            padding: 8px 16px; font-weight: bold; cursor: pointer; border-radius: 20px; font-size: 14px;
+        }
+        .hand-btn.active { background: #00ffcc; color: #000; box-shadow: 0 0 8px #00ffcc; }
+
+        /* スタート画面 */
+        #start-screen {
+            pointer-events: auto; text-align: center;
+            background: rgba(0, 0, 0, 0.8); padding: 30px; border-radius: 20px;
+            border: 1px solid #555; backdrop-filter: blur(5px);
+            width: 85%; max-width: 350px;
+        }
+        .app-title { color: #fff; font-size: 20px; margin-bottom: 20px; font-weight: bold; letter-spacing: 1px; }
+        
+        /* ボタン類 */
+        #start-btn {
+            background: linear-gradient(135deg, #00ffcc, #00ccaa); color: #000;
+            border: none; padding: 15px 0; width: 100%; font-size: 20px; font-weight: bold;
+            border-radius: 50px; cursor: pointer; margin-bottom: 15px;
+            box-shadow: 0 4px 15px rgba(0, 255, 204, 0.4);
+        }
+        #help-btn {
+            background: #444; color: #fff; border: 1px solid #777;
+            padding: 10px 0; width: 100%; border-radius: 50px; cursor: pointer; font-size: 14px;
+        }
+
+        /* 説明書モーダル (New!) */
+        #manual-modal {
+            display: none; pointer-events: auto; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 9999; overflow-y: auto;
+        }
+        .manual-content {
+            background: #1a1a1a; margin: 20px auto; padding: 25px; width: 85%; max-width: 500px;
+            border-radius: 15px; border: 1px solid #444; color: #eee;
+        }
+        .manual-title { font-size: 22px; color: #00ffcc; border-bottom: 2px solid #00ffcc; padding-bottom: 10px; margin-bottom: 15px; }
+        .manual-sec { margin-bottom: 20px; }
+        .manual-h3 { font-size: 16px; color: #fff; font-weight: bold; margin-bottom: 5px; }
+        .manual-p { font-size: 14px; line-height: 1.6; color: #ccc; }
+        .close-manual {
+            background: #00ffcc; color: #000; border: none; padding: 10px 30px;
+            font-weight: bold; border-radius: 20px; cursor: pointer; display: block; margin: 0 auto;
+        }
+
+        /* カウントダウン & 計測中 */
+        #countdown-ui, #recording-ui { display: none; pointer-events: none; text-align: center; }
+        .countdown-num { font-size: 100px; color: #00ffcc; font-weight: bold; text-shadow: 0 0 20px black; }
+        .timer { font-size: 80px; color: #fff; font-weight: bold; }
+        .rec-label { color: #ff3366; font-weight: bold; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* 結果画面 (詳細版) */
+        #result-ui {
+            display: none; pointer-events: auto; background: rgba(15, 15, 15, 0.98);
+            padding: 20px; border-radius: 15px; border: 2px solid #00ffcc;
+            width: 90%; max-width: 400px; color: #fff;
+        }
+        .res-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+        .res-item { background: #222; padding: 10px; border-radius: 10px; text-align: center; }
+        .res-label { font-size: 12px; color: #aaa; margin-bottom: 5px; }
+        .res-val { font-size: 24px; font-weight: bold; color: #fff; }
+        .res-unit { font-size: 12px; color: #888; }
+        
+        .main-score-box { text-align: center; padding-bottom: 15px; border-bottom: 1px solid #444; }
+        .main-score-val { font-size: 50px; font-weight: bold; color: #00ffcc; }
+        
+        .retry-btn { background: #444; color: #fff; width: 100%; padding: 12px; border-radius: 30px; border: none; cursor: pointer; font-size: 16px; }
+
     </style>
 </head>
 <body>
-    
-    <div id="debug-log"></div>
-
     <video id="input_video" style="display:none" autoplay playsinline></video>
 
     <div class="hand-switch-container">
-        <button class="hand-btn" id="btn-left" onclick="setHand('left')">LEFT</button>
-        <button class="hand-btn active" id="btn-right" onclick="setHand('right')">RIGHT</button>
+        <button class="hand-btn" id="btn-left" onclick="setHand('left')">左腕 (Left)</button>
+        <button class="hand-btn active" id="btn-right" onclick="setHand('right')">右腕 (Right)</button>
+    </div>
+
+    <div id="manual-modal">
+        <div class="manual-content">
+            <div class="manual-title">📘 アプリの使い方</div>
+            
+            <div class="manual-sec">
+                <div class="manual-h3">1. 目的</div>
+                <div class="manual-p">このアプリは、目に見えない「運動のエネルギー」を可視化します。作業療法士(OT)監修のもと、リハビリやトレーニングの成果を数値で確認するために作られました。</div>
+            </div>
+
+            <div class="manual-sec">
+                <div class="manual-h3">2. 準備すること</div>
+                <div class="manual-p">
+                    ✅ <strong>スマホを立てる:</strong> 1.5〜2メートル離れてください。<br>
+                    ✅ <strong>全身を映す:</strong> 画面の中心に体が来るように座ってください。<br>
+                    ✅ <strong>腕を選ぶ:</strong> 画面上のボタンで計測する腕を選んでください。
+                </div>
+            </div>
+
+            <div class="manual-sec">
+                <div class="manual-h3">3. どんな時に使う？</div>
+                <div class="manual-p">
+                    ・リーチ動作（手を伸ばす）の練習に。<br>
+                    ・「今日は調子が良いかな？」のチェックに。<br>
+                    ・左右の動きの違いを比べる時に。
+                </div>
+            </div>
+
+            <button class="close-manual" onclick="toggleManual(false)">閉じる</button>
+        </div>
     </div>
 
     <div class="ui-layer">
-        <button id="start-btn" onclick="startMeasurement()">START</button>
+        <div id="start-screen">
+            <div class="app-title">Upper Limb Analytics<br><span style="font-size:12px; color:#aaa">Supervised by OT</span></div>
+            <button id="start-btn" onclick="startSequence()">計測スタート</button>
+            <button id="help-btn" onclick="toggleManual(true)">使い方・説明書</button>
+        </div>
+
+        <div id="countdown-ui">
+            <div class="countdown-num" id="count-val">3</div>
+        </div>
         
         <div id="recording-ui">
-            <div style="color:#ff3366; font-weight:bold">● RECORDING</div>
+            <div class="rec-label">● RECORDING</div>
             <div class="timer" id="timer-val">10.0</div>
         </div>
 
         <div id="result-ui">
-            <div>TOTAL ENERGY</div>
-            <div class="score-val" id="total-score">0.0</div>
-            <button class="retry-btn" onclick="resetApp()">RETRY</button>
+            <div class="main-score-box">
+                <div class="res-label">TOTAL WORK (総運動エネルギー)</div>
+                <div class="main-score-val" id="res-total">0.0</div>
+            </div>
+            
+            <div class="res-grid">
+                <div class="res-item">
+                    <div class="res-label">MAX SPEED</div>
+                    <div class="res-val" id="res-max-speed">0.0</div>
+                    <div class="res-unit">m/s</div>
+                </div>
+                <div class="res-item">
+                    <div class="res-label">DISTANCE</div>
+                    <div class="res-val" id="res-dist">0.0</div>
+                    <div class="res-unit">meters</div>
+                </div>
+                <div class="res-item">
+                    <div class="res-label">ACTIVITY</div>
+                    <div class="res-val" id="res-count">0</div>
+                    <div class="res-unit">movements</div>
+                </div>
+                <div class="res-item">
+                    <div class="res-label">QUALITY</div>
+                    <div class="res-val" style="font-size:16px" id="res-comment">-</div>
+                    <div class="res-unit">feedback</div>
+                </div>
+            </div>
+            
+            <button class="retry-btn" onclick="resetApp()">ホームに戻る</button>
         </div>
     </div>
 
@@ -96,49 +199,49 @@
     <div class="graph-wrapper"><canvas id="chart_canvas"></canvas></div>
 
     <script>
-        // --- エラー監視機能 ---
-        const debugLog = document.getElementById('debug-log');
-        window.onerror = function(msg, url, line) {
-            debugLog.style.display = 'block';
-            debugLog.innerHTML += `⚠️ Error: ${msg} (Line:${line})<br>`;
-        };
-
-        // --- 設定変数 ---
-        let targetIndex = 16; // 右手(16) デフォルト
+        // --- 設定 ---
+        let targetIndex = 16; 
         
-        function setHand(side) {
-            try {
-                document.getElementById('btn-left').classList.remove('active');
-                document.getElementById('btn-right').classList.remove('active');
-                document.getElementById(`btn-${side}`).classList.add('active');
-                
-                if(side === 'left') targetIndex = 15;
-                else targetIndex = 16;
-                
-                resetApp();
-            } catch(e) { console.error(e); }
+        function toggleManual(show) {
+            document.getElementById('manual-modal').style.display = show ? 'block' : 'none';
         }
 
-        // --- アプリ変数 ---
+        function setHand(side) {
+            document.getElementById('btn-left').classList.remove('active');
+            document.getElementById('btn-right').classList.remove('active');
+            document.getElementById(`btn-${side}`).classList.add('active');
+            targetIndex = (side === 'left') ? 15 : 16;
+            resetApp();
+        }
+
+        // --- 変数 ---
         let isRecording = false;
-        let totalEnergy = 0;
-        let timeLeft = 10.0;
         let timerInterval = null;
         let lastTime = 0;
         let lastWrist = null;
         let pathHistory = [];
 
-        // UI要素取得
-        const startBtn = document.getElementById('start-btn');
+        // 計測データ
+        let sessionData = {
+            totalEnergy: 0,
+            maxSpeed: 0,
+            totalDistance: 0,
+            moveCount: 0
+        };
+        let isMoving = false; // 動作カウント用フラグ
+
+        // UI
+        const startScreen = document.getElementById('start-screen');
+        const countdownUI = document.getElementById('countdown-ui');
+        const countVal = document.getElementById('count-val');
         const recUI = document.getElementById('recording-ui');
         const resUI = document.getElementById('result-ui');
         const timerDisplay = document.getElementById('timer-val');
-        const scoreDisplay = document.getElementById('total-score');
+        
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
         const videoElement = document.getElementById('input_video');
 
-        // サイズ調整
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
             canvasElement.height = window.innerHeight;
@@ -146,7 +249,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Chart.js 安全初期化
+        // Chart
         let energyChart = null;
         try {
             const ctxChart = document.getElementById('chart_canvas').getContext('2d');
@@ -158,32 +261,82 @@
                 },
                 options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { display: false, suggestedMax: 10 }, x: { display: false } }, plugins: { legend: { display: false } } }
             });
-        } catch(e) { console.warn("Chart init error", e); }
+        } catch(e) {}
+
+        // --- シーケンス ---
+        function startSequence() {
+            startScreen.style.display = 'none';
+            countdownUI.style.display = 'block';
+            let count = 3;
+            countVal.innerText = count;
+
+            const cInterval = setInterval(() => {
+                count--;
+                if(count > 0) {
+                    countVal.innerText = count;
+                } else {
+                    clearInterval(cInterval);
+                    countdownUI.style.display = 'none';
+                    startMeasurement();
+                }
+            }, 1000);
+        }
 
         function startMeasurement() {
-            isRecording = true; totalEnergy = 0; timeLeft = 10.0;
-            startBtn.style.display = 'none'; resUI.style.display = 'none'; recUI.style.display = 'block';
-            if(timerInterval) clearInterval(timerInterval);
+            isRecording = true;
+            // データリセット
+            sessionData = { totalEnergy: 0, maxSpeed: 0, totalDistance: 0, moveCount: 0 };
+            isMoving = false;
+            
+            let timeLeft = 10.0;
+            recUI.style.display = 'block';
+            
+            pathHistory = [];
+            if(energyChart) { energyChart.data.datasets[0].data = Array(50).fill(0); energyChart.update(); }
+
             timerInterval = setInterval(() => {
                 timeLeft -= 0.1;
                 if(timeLeft < 0) timeLeft = 0;
                 timerDisplay.innerText = timeLeft.toFixed(1);
+                
                 if(timeLeft <= 0) stopMeasurement();
             }, 100);
         }
 
         function stopMeasurement() {
-            isRecording = false; clearInterval(timerInterval);
-            recUI.style.display = 'none'; resUI.style.display = 'block';
-            scoreDisplay.innerText = totalEnergy.toFixed(1);
+            isRecording = false;
+            clearInterval(timerInterval);
+            recUI.style.display = 'none';
+            showResult();
+        }
+
+        function showResult() {
+            resUI.style.display = 'block';
+            
+            // 数値の反映
+            document.getElementById('res-total').innerText = sessionData.totalEnergy.toFixed(1);
+            document.getElementById('res-max-speed').innerText = sessionData.maxSpeed.toFixed(2);
+            document.getElementById('res-dist').innerText = sessionData.totalDistance.toFixed(2);
+            document.getElementById('res-count').innerText = sessionData.moveCount;
+
+            // 簡易フィードバックロジック
+            let comment = "Good Effort!";
+            if(sessionData.maxSpeed > 2.0) comment = "Very Dynamic!";
+            else if(sessionData.totalDistance > 5.0) comment = "High Endurance!";
+            else if(sessionData.moveCount > 5) comment = "Good Reps!";
+            else if(sessionData.totalEnergy < 10) comment = "Keep Trying!";
+            
+            document.getElementById('res-comment').innerText = comment;
         }
 
         function resetApp() {
-            resUI.style.display = 'none'; startBtn.style.display = 'block';
+            resUI.style.display = 'none';
+            startScreen.style.display = 'block';
             pathHistory = [];
             if(energyChart) { energyChart.data.datasets[0].data = Array(50).fill(0); energyChart.update(); }
         }
 
+        // --- MediaPipe ---
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
@@ -194,6 +347,7 @@
                 const wristScreen = results.poseLandmarks[targetIndex];
                 const currentTime = Date.now();
                 let currentEnergy = 0;
+                let velocity = 0;
 
                 if (lastWrist && lastTime > 0) {
                     const deltaTime = (currentTime - lastTime) / 1000;
@@ -203,12 +357,29 @@
                             Math.pow(wristWorld.y - lastWrist.y, 2) +
                             Math.pow(wristWorld.z - lastWrist.z, 2)
                         );
-                        const v = dist / deltaTime;
-                        if(v < 15) currentEnergy = 0.5 * Math.pow(v, 2);
+                        velocity = dist / deltaTime;
+                        
+                        // ノイズ除去しつつ計算
+                        if(velocity < 15) {
+                            currentEnergy = 0.5 * Math.pow(velocity, 2);
+                            
+                            // ★計測中のみ集計
+                            if(isRecording) {
+                                sessionData.totalEnergy += currentEnergy;
+                                sessionData.totalDistance += dist;
+                                if(velocity > sessionData.maxSpeed) sessionData.maxSpeed = velocity;
+
+                                // 動作カウント (簡易ロジック: 一定速度を超えたら「動き始め」)
+                                if(velocity > 0.5 && !isMoving) {
+                                    isMoving = true;
+                                    sessionData.moveCount++;
+                                } else if(velocity < 0.2) {
+                                    isMoving = false;
+                                }
+                            }
+                        }
                     }
                 }
-
-                if(isRecording) totalEnergy += currentEnergy;
 
                 if(energyChart) {
                     const data = energyChart.data.datasets[0].data;
@@ -242,11 +413,9 @@
             canvasCtx.restore();
         }
 
-        // MediaPipe Init
         const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
         pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         pose.onResults(onResults);
-        
         const camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 640, height: 480 });
         camera.start();
     </script>
