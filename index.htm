@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rehab-Vis 3D PoC</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #222; color: #fff; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+        .container { position: relative; width: 100%; max-width: 640px; }
+        video { display: none; }
+        canvas { width: 100%; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .metrics { margin-top: 20px; padding: 15px; background: #333; border-radius: 8px; width: 100%; max-width: 600px; font-family: monospace; font-size: 1.1em; }
+        .metric-row { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding: 5px 0; }
+        .highlight { color: #00ffcc; font-weight: bold; }
+        .warning { color: #ffcc00; font-size: 0.8em; margin-top: 10px;}
+    </style>
+</head>
+<body>
+    <h2>Rehab-Vis 3D: 技術検証</h2>
+    <div class="container">
+        <video id="input_video"></video>
+        <canvas id="output_canvas" width="640" height="480"></canvas>
+    </div>
+    <div class="metrics">
+        <div class="metric-row">右手 速度 (m/s): <span id="velocity-val" class="highlight">0.00</span></div>
+        <div class="metric-row">推定エネルギー (K): <span id="energy-val" class="highlight">0.00</span></div>
+        <div class="metric-row">Z座標 (奥行き): <span id="z-val">0.00</span></div>
+        <div class="metric-row">ステータス: <span id="status-val">カメラ準備中...</span></div>
+    </div>
+    <div class="warning">※Z座標はカメラに手を近づけるとマイナス、離すとプラスになります。</div>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const velocityDisplay = document.getElementById('velocity-val');
+        const energyDisplay = document.getElementById('energy-val');
+        const zDisplay = document.getElementById('z-val');
+        const statusDisplay = document.getElementById('status-val');
+
+        let lastTime = 0;
+        let lastWrist = null;
+        const SMOOTHING = 0.5;
+
+        function onResults(results) {
+            statusDisplay.innerText = "計測中";
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseWorldLandmarks && results.poseWorldLandmarks[16]) {
+                const wrist = results.poseWorldLandmarks[16];
+                
+                // 簡易描画
+                if(results.poseLandmarks){
+                    const drawWrist = results.poseLandmarks[16];
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(drawWrist.x * canvasElement.width, drawWrist.y * canvasElement.height, 10, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = "#00ffcc";
+                    canvasCtx.fill();
+                }
+
+                const currentTime = Date.now();
+                if (lastWrist && lastTime > 0) {
+                    const deltaTime = (currentTime - lastTime) / 1000;
+                    const distance = Math.sqrt(Math.pow(wrist.x - lastWrist.x, 2) + Math.pow(wrist.y - lastWrist.y, 2) + Math.pow(wrist.z - lastWrist.z, 2));
+                    const velocity = distance / deltaTime;
+
+                    if(velocity < 10) { 
+                        const energy = 0.5 * 1.0 * Math.pow(velocity, 2);
+                        velocityDisplay.innerText = velocity.toFixed(2);
+                        energyDisplay.innerText = energy.toFixed(2);
+                        zDisplay.innerText = wrist.z.toFixed(2);
+                    }
+                }
+                if(lastWrist) {
+                    lastWrist = { x: lastWrist.x * SMOOTHING + wrist.x * (1 - SMOOTHING), y: lastWrist.y * SMOOTHING + wrist.y * (1 - SMOOTHING), z: lastWrist.z * SMOOTHING + wrist.z * (1 - SMOOTHING) };
+                } else { lastWrist = { x: wrist.x, y: wrist.y, z: wrist.z }; }
+                lastTime = currentTime;
+            }
+            canvasCtx.restore();
+        }
+
+        const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        pose.onResults(onResults);
+
+        const camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 640, height: 480 });
+        camera.start();
+    </script>
+</body>
+</html>
