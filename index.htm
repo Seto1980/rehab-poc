@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Rehab-Vis Pro v4 (Full Metrics)</title>
+    <title>Rehab-Vis Pro v5 (Fix Count)</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -43,7 +43,7 @@
         }
         .hand-btn.active { background: #00ffcc; color: #000; box-shadow: 0 0 10px #00ffcc; }
 
-        /* マニュアル (説明書) */
+        /* マニュアル (説明書) - 更新版 */
         #manual-modal {
             display: none; pointer-events: auto; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;
@@ -57,12 +57,12 @@
             background: #00ffcc; color: #000; padding: 5px 10px; border-radius: 4px;
             font-weight: bold; font-size: 12px; display: inline-block; margin-bottom: 10px;
         }
-        .manual-h3 { color:#00ffcc; border-bottom:1px solid #444; padding-bottom:5px; margin-top:25px; font-size: 18px; }
+        .manual-h3 { color:#00ffcc; border-bottom:1px solid #444; padding-bottom:5px; margin-top:25px; font-size: 18px; font-weight: bold; }
         .manual-p { font-size: 14px; line-height: 1.6; color: #ccc; margin: 10px 0; }
         .manual-li { font-size: 14px; line-height: 1.6; color: #ccc; margin-left: 20px; margin-bottom: 5px; }
         .manual-warn { 
-            border: 1px solid #ff5555; background: rgba(255,85,85,0.1); 
-            padding: 10px; border-radius: 8px; font-size: 13px; color: #ffcccc; margin-top: 10px;
+            border: 1px solid #ff5555; background: rgba(255,85,85,0.15); 
+            padding: 15px; border-radius: 8px; font-size: 13px; color: #ffcccc; margin-top: 15px;
         }
 
         /* スタート画面 */
@@ -130,29 +130,44 @@
             
             <div class="manual-h3">1. 目的 (Purpose)</div>
             <p class="manual-p">
-                本アプリは、リハビリテーションにおける上肢機能（リーチ動作）を可視化し、患者様自身の「気づき」と「モチベーション向上」を支援します。<br>
-                「伸びた距離（％）」だけでなく、「動いた速さ（Speed）」や「運動量（Energy）」も同時に計測し、総合的な運動の質を評価します。
+                本アプリは、リハビリテーションにおける上肢機能（リーチ動作）を客観的に可視化し、患者様自身の「気づき」と「モチベーション向上」を支援することを目的としています。<br>
+                AIが「個人の最大可動域」に対する達成度（％）を測定するため、体格差に関わらず評価が可能です。
             </p>
 
-            <div class="manual-h3">2. 使い方 (Usage)</div>
+            <div class="manual-h3">2. 正しい使い方 (Usage)</div>
             <p class="manual-p"><strong>STEP 1: 準備</strong><br>
-            カメラに対して横向き、または正面に座ります。</p>
+            カメラに対して横向き（推奨）、または正面に座ります。</p>
             
             <p class="manual-p"><strong>STEP 2: キャリブレーション（最大測定）</strong><br>
-            最初の5秒間で<span style="color:#ffcc00;">腕を限界まで大きく伸ばしてください。</span>その距離が「100%」として記憶されます。</p>
+            スタート後、最初の5秒間で<span style="color:#ffcc00;">腕を限界まで大きく伸ばしてください。</span><br>
+            この時の距離を「100%」として基準化します。<strong>※ここでしっかり伸ばさないと、後の数値がズレます。</strong></p>
 
-            <p class="manual-p"><strong>STEP 3: トレーニング開始</strong><br>
-            10秒間の計測で、大きく素早く動かしましょう。<br>
-            ・最大（100%）の<strong>70%</strong>ラインを超えると「リーチ」<br>
-            ・手元（30%）まで戻すと「1回」とカウントされます。</p>
+            <p class="manual-p"><strong>STEP 3: トレーニング</strong><br>
+            10秒間の計測が始まります。大きく動かして回数を稼ぎましょう。<br>
+            ・<span style="color:#00ffcc">60%</span>ラインを超えると「リーチ」<br>
+            ・<span style="color:#ff3366">50%</span>以下まで戻すと「1回」とカウント（判定を甘く設定しています）。</p>
 
             <div class="manual-h3">3. 結果の解釈 (Interpretation)</div>
             <ul>
-                <li class="manual-li"><strong>COUNT (回数):</strong><br>正確に往復運動ができた回数です。</li>
-                <li class="manual-li"><strong>MAX % (最大到達率):</strong><br>個人の最大可動域に対する達成度です。</li>
-                <li class="manual-li"><strong>MAX SPEED (瞬発力):</strong><br>動きの最大速度 (m/s) です。麻痺側の初動の速さなどの評価に役立ちます。</li>
-                <li class="manual-li"><strong>ENERGY (総運動量):</strong><br>「速さ×回数」の総和です。数値が高いほど、力強くたくさん動いたことになります。</li>
+                <li class="manual-li"><strong>COUNT (回数):</strong> 反復運動の回数です。</li>
+                <li class="manual-li"><strong>MAX % (最大到達率):</strong> 最初の最大測定に対して、どれだけ力を発揮できたか（疲労度の目安）。</li>
+                <li class="manual-li"><strong>MAX SPEED (瞬発力):</strong> 動きの最大速度 (m/s)。動き出しの良さを評価します。</li>
+                <li class="manual-li"><strong>ENERGY (総運動量):</strong> 運動の「量」と「強さ」の合計値です。</li>
             </ul>
+
+            <div class="manual-h3">⚠️ アプリの限界・注意点 (Limitations)</div>
+            <div class="manual-warn">
+                <strong>【精度の限界について】</strong><br>
+                本アプリは単眼カメラを使用しており、奥行きセンサー（LiDAR等）を使用しないため、実際の距離（cm）とは誤差が生じます。<strong>「他人との比較」ではなく「自分の中での比較」</strong>としてご使用ください。
+                <br><br>
+                <strong>【エラーが出やすい条件】</strong><br>
+                <ul>
+                    <li><strong>衣服:</strong> 背景と同化する色や、ダボッとした服（袖の位置が不明瞭）の場合、認識精度が落ちます。</li>
+                    <li><strong>角度:</strong> 「正面」からの撮影は奥行きの変化を捉えにくいため、数値が低く出がちです。可能な限り<strong>「真横」</strong>からの撮影を推奨します。</li>
+                    <li><strong>照明:</strong> 逆光や暗すぎる場所では認識できません。</li>
+                </ul>
+                ※本アプリは医療機器ではありません。診断目的には使用しないでください。
+            </div>
 
             <button class="retry-btn" onclick="document.getElementById('manual-modal').style.display='none'">閉じて計測へ</button>
         </div>
@@ -161,7 +176,7 @@
     <div class="ui-layer">
         <div id="start-screen">
             <h2 style="color:#fff; margin-bottom: 5px;">Rehab Analytics Pro</h2>
-            <div style="color:#aaa; font-size:14px;">Full Metrics: Reach, Speed & Energy</div>
+            <div style="color:#aaa; font-size:14px;">Full Metrics v5: Fix Count Logic</div>
             
             <button id="start-btn" onclick="startCalibration()">測定開始</button>
             <br>
@@ -257,10 +272,11 @@
             moveCount: 0 
         };
         
-        // カウント閾値
+        // ★★★ カウント閾値の修正部分 ★★★
         let isReaching = false; 
-        const THRESHOLD_HIGH = 0.70; 
-        const THRESHOLD_LOW = 0.30; 
+        // 判定を大幅に緩和しました
+        const THRESHOLD_HIGH = 0.60; // 60%伸ばせば「伸びた」と判定
+        const THRESHOLD_LOW = 0.50;  // 50%まで戻せば「戻った」と判定 (以前は30%でした)
 
         // UI
         const videoElement = document.getElementById('input_video');
@@ -293,8 +309,6 @@
         });
 
         // --- シーケンス ---
-        
-        // 1. キャリブレーション (5秒)
         function startCalibration() {
             appState = 'calibration';
             document.getElementById('start-screen').style.display = 'none';
@@ -311,13 +325,12 @@
                 } else {
                     clearInterval(cTimer);
                     document.getElementById('calibration-ui').style.display = 'none';
-                    if(calibratedMaxReach < 0.1) calibratedMaxReach = 0.3; // 安全策
+                    if(calibratedMaxReach < 0.1) calibratedMaxReach = 0.3; 
                     startMeasurement();
                 }
             }, 1000);
         }
 
-        // 2. 計測 (10秒)
         function startMeasurement() {
             appState = 'recording';
             document.getElementById('recording-ui').style.display = 'block';
@@ -337,7 +350,6 @@
             }, 100);
         }
 
-        // 3. 結果
         function finishMeasurement() {
             appState = 'result';
             document.getElementById('recording-ui').style.display = 'none';
@@ -362,19 +374,19 @@
                 const shoulder2D = results.poseLandmarks[targetShoulder];
 
                 if (hand3D && shoulder3D) {
-                    // 距離計算 (ユークリッド距離)
+                    // 距離計算
                     const dist = Math.sqrt(
                         Math.pow(hand3D.x - shoulder3D.x, 2) +
                         Math.pow(hand3D.y - shoulder3D.y, 2) +
                         Math.pow(hand3D.z - shoulder3D.z, 2)
                     );
 
-                    // A. キャリブレーション中: 最大値更新
+                    // A. キャリブレーション中
                     if (appState === 'calibration') {
                         if (dist > calibratedMaxReach) calibratedMaxReach = dist;
                     }
                     
-                    // B. 計測中: ％判定 + Speed/Energy
+                    // B. 計測中
                     else if (appState === 'recording') {
                         let ratio = dist / calibratedMaxReach;
                         if(ratio > 1.2) ratio = 1.2; 
@@ -389,54 +401,46 @@
 
                         if(percent > sessionData.maxPercent) sessionData.maxPercent = percent;
 
-                        // カウント判定
+                        // ★★★ カウント判定 (修正済) ★★★
                         if (!isReaching && ratio > THRESHOLD_HIGH) {
                             isReaching = true;
-                            debugMsg.innerText = "Reaching (>70%)";
+                            debugMsg.innerText = "Reaching (>60%)"; // デバッグ表示
                         } else if (isReaching && ratio < THRESHOLD_LOW) {
                             isReaching = false;
                             sessionData.moveCount++;
                             document.getElementById('rt-count').innerText = sessionData.moveCount;
-                            debugMsg.innerText = "Return (<30%) Count!";
+                            debugMsg.innerText = "Return (<50%) -> Count!"; // デバッグ表示
                         }
 
-                        // ★Speed & Energy 計算 (復活)
+                        // Speed & Energy
                         const currentTime = Date.now();
                         if (lastWrist && lastTime > 0) {
-                            const dt = (currentTime - lastTime) / 1000; // 秒
+                            const dt = (currentTime - lastTime) / 1000; 
                             if (dt > 0) {
-                                // 3次元距離の移動量
                                 const moveDist = Math.sqrt(
                                     Math.pow(hand3D.x - lastWrist.x, 2) +
                                     Math.pow(hand3D.y - lastWrist.y, 2) +
                                     Math.pow(hand3D.z - lastWrist.z, 2)
                                 );
-                                let speed = moveDist / dt; // m/s
+                                let speed = moveDist / dt; 
                                 
-                                // ノイズ処理 (20m/s以上は無視)
                                 if (speed < 20) {
-                                    // 運動量 (簡易: 0.5 * v^2)
                                     sessionData.totalEnergy += (0.5 * speed * speed);
-                                    
-                                    // 最大速度
                                     if(speed > sessionData.maxSpeed) sessionData.maxSpeed = speed;
-                                    
-                                    // リアルタイム速度表示
                                     document.getElementById('rt-speed').innerText = speed.toFixed(1);
                                 }
                             }
                         }
                     }
 
-                    // C. 描画 (Visuals)
+                    // C. 描画
                     const px = hand2D.x * canvasElement.width;
                     const py = hand2D.y * canvasElement.height;
                     const sx = shoulder2D.x * canvasElement.width;
                     const sy = shoulder2D.y * canvasElement.height;
 
-                    // 共通マーカーデザイン
-                    drawMarker(sx, sy, "#00FFFF", "Shoulder"); // 肩
-                    drawMarker(px, py, isReaching ? "#FF3366" : "#00FFFF", "Hand"); // 手
+                    drawMarker(sx, sy, "#00FFFF", "Shoulder"); 
+                    drawMarker(px, py, isReaching ? "#FF3366" : "#00FFFF", "Hand");
 
                     lastWrist = hand3D;
                     lastTime = Date.now();
@@ -453,7 +457,6 @@
             canvasCtx.lineWidth = 3;
             canvasCtx.stroke();
             
-            // ラベル
             if(label) {
                 canvasCtx.fillStyle = "#fff";
                 canvasCtx.font = "bold 12px Arial";
