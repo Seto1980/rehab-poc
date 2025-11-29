@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Rehab-Vis Hybrid</title>
+    <title>Rehab-Vis v3 Visual</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -39,7 +39,7 @@
             background: transparent; border: none; color: #ccc;
             padding: 8px 16px; font-weight: bold; cursor: pointer; border-radius: 20px;
         }
-        .hand-btn.active { background: #00ffcc; color: #000; }
+        .hand-btn.active { background: #00ffcc; color: #000; box-shadow: 0 0 10px #00ffcc; }
 
         /* マニュアル */
         #help-btn {
@@ -52,10 +52,11 @@
             background: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;
         }
         .manual-content {
-            background: #1a1a1a; margin: 20px auto; padding: 25px; width: 85%; max-width: 500px;
+            background: #1a1a1a; margin: 20px auto; padding: 25px; width: 90%; max-width: 500px;
             border-radius: 15px; border: 1px solid #444; color: #eee; text-align: left;
+            padding-bottom: 50px;
         }
-        .manual-highlight { color: #ffcc00; font-weight: bold; }
+        .manual-h3 { color:#00ffcc; border-bottom:1px solid #444; padding-bottom:5px; margin-top:20px; }
 
         /* スタート画面 */
         #start-screen {
@@ -68,7 +69,9 @@
             border: none; padding: 15px 40px; font-size: 20px; 
             font-weight: bold; border-radius: 50px; cursor: pointer; margin-top: 20px;
             color: #000; box-shadow: 0 0 15px rgba(0,255,204,0.3);
+            transition: transform 0.1s;
         }
+        #start-btn:active { transform: scale(0.95); }
 
         /* カウントダウン */
         #countdown-ui { display: none; }
@@ -108,86 +111,47 @@
 
     <div id="manual-modal">
         <div class="manual-content">
-            <h3 style="color:#00ffcc; border-bottom:1px solid #444; padding-bottom:10px;">使い方ガイド</h3>
-            
-            <p><strong>1. 横を向いて座りましょう</strong><br>
-            カメラに対して<span class="manual-highlight">「真横」</span>を向くと、リーチの距離が最も正確に測れます。</p>
-            
-            <p><strong>2. 開始位置で静止します</strong><br>
-            カウントダウン（3, 2, 1）の間は、手を膝の上などの<span class="manual-highlight">「スタート位置」</span>に置いて止まってください。そこが「0地点」になります。</p>
-
-            <p><strong>3. 大きく動かしましょう</strong><br>
-            スタート位置から<span class="manual-highlight">20cm以上</span>手を伸ばすと「リーチ」と判定され、元の位置に戻すと「1回」とカウントされます。</p>
-
-            <p><strong>4. 指標について</strong><br>
-            ・REACH: 肩から手までの距離<br>
-            ・ENERGY: 動きの速さと強さ<br>
-            ・COUNT: 往復回数</p>
-
+            <h3 style="color:#00ffcc; margin-top:0;">📘 アプリの使い方</h3>
+            <p>1. <strong>肩のマーク</strong>を確認してください。そこが計測の基準点です。</p>
+            <p>2. 手を動かすと、速度に応じて<strong>色のついた軌跡</strong>が表示されます。</p>
+            <p>3. <strong>「計測開始」</strong>を押す前からグラフは動きます。カメラの位置調整に使ってください。</p>
             <button class="retry-btn" onclick="document.getElementById('manual-modal').style.display='none'">閉じる</button>
         </div>
     </div>
 
     <div class="ui-layer">
         <div id="start-screen">
-            <button id="help-btn" onclick="document.getElementById('manual-modal').style.display='block'">?</button>
+            <button id="help-btn" onclick="document.getElementById('manual-modal').style.display='block'">使い方</button>
             <h2 style="color:#fff; margin-bottom: 5px;">Rehab Analytics</h2>
-            <div style="color:#888; font-size:12px;">Hybrid Measure: Energy & Reach</div>
+            <div style="color:#888; font-size:12px;">Visual Feedback: V3</div>
             <button id="start-btn" onclick="startSequence()">計測開始</button>
         </div>
 
         <div id="countdown-ui">
-            <div class="guide-msg">スタート位置で静止してください...</div>
+            <div class="guide-msg">スタート位置で静止...</div>
             <div class="countdown-num" id="count-val">3</div>
         </div>
 
         <div id="recording-ui">
             <div style="color:#ff3366; font-weight:bold; animation: blink 1s infinite;">● RECORDING</div>
             <div class="timer" id="timer-val">10.0</div>
-            
             <div class="realtime-box">
-                <div class="rt-item">
-                    <div class="rt-label">COUNT</div>
-                    <div class="rt-val" id="rt-count">0</div>
-                </div>
-                <div class="rt-item">
-                    <div class="rt-label">SPEED</div>
-                    <div class="rt-val"><span id="rt-speed">0.0</span> <span style="font-size:10px">m/s</span></div>
-                </div>
-                <div class="rt-item">
-                    <div class="rt-label">REACH</div>
-                    <div class="rt-val"><span id="rt-reach">0.0</span> <span style="font-size:10px">m</span></div>
-                </div>
+                <div class="rt-item"><div class="rt-label">COUNT</div><div class="rt-val" id="rt-count">0</div></div>
+                <div class="rt-item"><div class="rt-label">REACH</div><div class="rt-val"><span id="rt-reach">0.0</span> m</div></div>
             </div>
+            <div id="debug-msg" style="font-size:10px; color:#555; margin-top:5px;"></div>
         </div>
 
         <div id="result-ui">
             <h3 style="margin:0 0 15px 0; color:#00ffcc;">RESULT</h3>
-            
             <div style="margin-bottom: 20px;">
-                <div style="font-size:12px; color:#aaa;">TOTAL ENERGY (運動量)</div>
+                <div style="font-size:12px; color:#aaa;">TOTAL ENERGY</div>
                 <div style="font-size:40px; font-weight:bold; color:#00ffcc;" id="res-energy">0.0</div>
             </div>
-
             <div class="res-grid">
-                <div class="res-box">
-                    <div style="font-size:10px; color:#aaa;">COUNT</div>
-                    <div class="res-big" id="res-count">0</div>
-                </div>
-                <div class="res-box">
-                    <div style="font-size:10px; color:#aaa;">MAX SPEED</div>
-                    <div class="res-big" id="res-speed">0.0</div>
-                </div>
-                <div class="res-box">
-                    <div style="font-size:10px; color:#aaa;">MAX REACH</div>
-                    <div class="res-big" id="res-reach">0.0</div>
-                </div>
-                <div class="res-box">
-                    <div style="font-size:10px; color:#aaa;">DISTANCE</div>
-                    <div class="res-big" id="res-dist">0.0</div>
-                </div>
+                <div class="res-box"><div style="font-size:10px; color:#aaa;">COUNT</div><div class="res-big" id="res-count">0</div></div>
+                <div class="res-box"><div style="font-size:10px; color:#aaa;">MAX REACH</div><div class="res-big" id="res-reach">0.0</div></div>
             </div>
-            
             <button class="retry-btn" onclick="location.reload()">ホームに戻る</button>
         </div>
     </div>
@@ -206,35 +170,31 @@
             document.getElementById(`btn-${side}`).classList.add('active');
             if(side === 'left') { targetHand = 15; targetShoulder = 11; }
             else { targetHand = 16; targetShoulder = 12; }
+            pathHistory = []; // 手を変えたら軌跡もリセット
         }
 
         // --- 変数 (Variables) ---
         let isRecording = false;
         let lastTime = 0;
         let lastWrist = null;
-        
-        // スタート位置の記憶用
         let startPositionDist = null; 
-
-        // 計測データ
-        let sessionData = { 
-            totalEnergy: 0, 
-            maxSpeed: 0, 
-            maxReach: 0, 
-            moveCount: 0, 
-            totalDist: 0 
-        };
         
-        // カウント用ステートマシン
-        let isReaching = false; 
-        const REACH_THRESHOLD = 0.20; // スタート位置から+20cmでリーチ判定
+        // 軌跡描画用配列
+        let pathHistory = [];
 
-        // UI要素
+        // データ
+        let sessionData = { totalEnergy: 0, maxSpeed: 0, maxReach: 0, moveCount: 0, totalDist: 0 };
+        let isReaching = false; 
+        const REACH_LIMIT = 0.15; 
+        const RETURN_LIMIT = 0.10; 
+
+        // UI
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
+        const debugMsg = document.getElementById('debug-msg');
         
-        // グラフ初期化
+        // グラフ
         const ctxChart = document.getElementById('chart_canvas').getContext('2d');
         let chart = new Chart(ctxChart, {
             type: 'line',
@@ -243,13 +203,17 @@
                 datasets: [{ 
                     data: Array(50).fill(0), 
                     borderColor: '#00ffcc', 
-                    backgroundColor: 'rgba(0,255,204,0.2)', 
-                    fill: true, tension: 0.1, pointRadius: 0 
+                    backgroundColor: 'rgba(0,255,204,0.1)', // 薄く塗りつぶし
+                    borderWidth: 2,
+                    fill: true, tension: 0.4, pointRadius: 0 
                 }]
             },
             options: { 
                 responsive: true, maintainAspectRatio: false, animation: false,
-                scales: { y: { display: true, min: 0 }, x: { display: false } },
+                scales: { 
+                    y: { display: true, min: 0, grid: { color: '#333'} }, 
+                    x: { display: false } 
+                },
                 plugins: { legend: { display: false } }
             }
         });
@@ -261,7 +225,6 @@
             let count = 3;
             document.getElementById('count-val').innerText = count;
 
-            // カウントダウン処理
             const cTimer = setInterval(() => {
                 count--;
                 if(count > 0) {
@@ -269,9 +232,7 @@
                 } else {
                     clearInterval(cTimer);
                     document.getElementById('countdown-ui').style.display = 'none';
-                    
-                    // ★ここでスタート位置をリセット・決定
-                    startPositionDist = null; 
+                    startPositionDist = null; // カウントダウン終了時にスタート位置をリセット
                     startMeasurement();
                 }
             }, 1000);
@@ -280,8 +241,6 @@
         function startMeasurement() {
             isRecording = true;
             document.getElementById('recording-ui').style.display = 'block';
-            
-            // データリセット
             sessionData = { totalEnergy: 0, maxSpeed: 0, maxReach: 0, moveCount: 0, totalDist: 0 };
             isReaching = false;
 
@@ -302,16 +261,14 @@
             isRecording = false;
             document.getElementById('recording-ui').style.display = 'none';
             document.getElementById('result-ui').style.display = 'block';
-            
             document.getElementById('res-energy').innerText = sessionData.totalEnergy.toFixed(1);
             document.getElementById('res-count').innerText = sessionData.moveCount;
-            document.getElementById('res-speed').innerText = sessionData.maxSpeed.toFixed(2);
             document.getElementById('res-reach').innerText = sessionData.maxReach.toFixed(2);
-            document.getElementById('res-dist').innerText = sessionData.totalDist.toFixed(2);
         }
 
         // --- MediaPipe Loop ---
         function onResults(results) {
+            // 1. キャンバスリセット
             canvasElement.width = window.innerWidth;
             canvasElement.height = window.innerHeight;
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
@@ -320,85 +277,132 @@
                 const hand3D = results.poseWorldLandmarks[targetHand];
                 const shoulder3D = results.poseWorldLandmarks[targetShoulder];
                 const hand2D = results.poseLandmarks[targetHand];
+                const shoulder2D = results.poseLandmarks[targetShoulder];
 
                 if (hand3D && shoulder3D) {
                     const currentTime = Date.now();
-                    
-                    // 1. 肩からの絶対距離 (メートル)
-                    const distFromShoulder = Math.sqrt(
+                    const currentDist = Math.sqrt(
                         Math.pow(hand3D.x - shoulder3D.x, 2) +
                         Math.pow(hand3D.y - shoulder3D.y, 2) +
                         Math.pow(hand3D.z - shoulder3D.z, 2)
                     );
 
-                    // 計測開始直後、最初の値を「基準(Start Position)」にする
+                    // スタート位置自動キャリブレーション (計測開始直後に固定)
                     if (isRecording && startPositionDist === null) {
-                        startPositionDist = distFromShoulder;
+                        startPositionDist = currentDist;
                     }
-
-                    // 2. 速さとエネルギーの計算 (前フレームとの差分)
+                    
+                    // --- 速度計算 (エネルギー & トレイルの色用) ---
                     let velocity = 0;
                     if (lastWrist && lastTime > 0) {
                         const deltaTime = (currentTime - lastTime) / 1000;
                         if (deltaTime > 0) {
-                            const moveDist = Math.sqrt(
+                            const distDelta = Math.sqrt(
                                 Math.pow(hand3D.x - lastWrist.x, 2) +
                                 Math.pow(hand3D.y - lastWrist.y, 2) +
                                 Math.pow(hand3D.z - lastWrist.z, 2)
                             );
-                            velocity = moveDist / deltaTime;
-                            
-                            // ノイズ除去（速すぎる移動は無視）
-                            if(velocity < 15 && isRecording) {
-                                // エネルギー計算 (1/2 mv^2)
-                                const energy = 0.5 * Math.pow(velocity, 2);
-                                sessionData.totalEnergy += energy;
-                                sessionData.totalDist += moveDist;
-                                if(velocity > sessionData.maxSpeed) sessionData.maxSpeed = velocity;
-                                
-                                // 画面更新
-                                document.getElementById('rt-speed').innerText = velocity.toFixed(2);
-                            }
+                            velocity = distDelta / deltaTime;
+                            if(velocity > 20) velocity = 0; // ノイズカット
                         }
                     }
 
-                    // 3. グラフとカウント処理
+                    // --- 計測データの更新 (Recording中のみ) ---
                     if (isRecording && startPositionDist !== null) {
-                        // スタート位置からの変位（どれだけ伸びたか）
-                        const relativeReach = distFromShoulder - startPositionDist; 
+                        const moveVal = currentDist - startPositionDist;
+                        const energy = 0.5 * Math.pow(velocity, 2);
                         
-                        // グラフ更新 (絶対距離を表示)
-                        const data = chart.data.datasets[0].data;
-                        data.shift(); 
-                        data.push(distFromShoulder); 
-                        chart.update();
+                        // 積算
+                        sessionData.totalEnergy += energy;
+                        if(currentDist > sessionData.maxReach) sessionData.maxReach = currentDist;
 
-                        // リアルタイム表示
-                        document.getElementById('rt-reach').innerText = distFromShoulder.toFixed(2);
-                        if(distFromShoulder > sessionData.maxReach) sessionData.maxReach = distFromShoulder;
-
-                        // ★カウントロジック (相対距離を使用)
-                        // スタート位置から +20cm 伸びたら「リーチ中」
-                        if (!isReaching && relativeReach > REACH_THRESHOLD) {
+                        // カウントロジック
+                        if (!isReaching && moveVal > REACH_LIMIT) {
                             isReaching = true;
-                        }
-                        // スタート位置近く (+5cm以内) に戻ったら「カウント」
-                        else if (isReaching && relativeReach < 0.05) {
+                            debugMsg.innerText = "Reaching...";
+                        } else if (isReaching && moveVal < RETURN_LIMIT) {
                             isReaching = false;
                             sessionData.moveCount++;
                             document.getElementById('rt-count').innerText = sessionData.moveCount;
+                            debugMsg.innerText = "Count!";
+                        }
+                        
+                        // リアルタイム表示
+                        document.getElementById('rt-reach').innerText = currentDist.toFixed(2);
+                    }
+
+                    // --- グラフ更新 (常時: Always On) ---
+                    // 計測前でも波形が出るので、認識チェックができる
+                    const data = chart.data.datasets[0].data;
+                    data.shift(); 
+                    data.push(currentDist); 
+                    chart.update();
+
+                    // --- 描画1: 軌跡 (Motion Trail) ---
+                    // 履歴に追加
+                    const px = hand2D.x * canvasElement.width;
+                    const py = hand2D.y * canvasElement.height;
+                    pathHistory.push({ x: px, y: py, speed: velocity });
+                    if(pathHistory.length > 15) pathHistory.shift(); // 軌跡の長さ
+
+                    // 軌跡を描画
+                    if(pathHistory.length > 1) {
+                        canvasCtx.lineCap = 'round';
+                        canvasCtx.lineWidth = 6;
+                        
+                        for (let i = 0; i < pathHistory.length - 1; i++) {
+                            const pt1 = pathHistory[i];
+                            const pt2 = pathHistory[i+1];
+                            const speed = pt2.speed;
+                            
+                            // 色の計算: 遅い=青(240), 速い=赤(0)
+                            // speed 0~3m/s を Hue 240~0 にマッピング
+                            let hue = 240 - (speed * 80);
+                            if (hue < 0) hue = 0; // 赤で止める
+                            if (hue > 240) hue = 240; // 青で止める
+
+                            // 透明度: 古いほど薄く
+                            const alpha = (i / pathHistory.length);
+
+                            canvasCtx.beginPath();
+                            canvasCtx.moveTo(pt1.x, pt1.y);
+                            canvasCtx.lineTo(pt2.x, pt2.y);
+                            canvasCtx.strokeStyle = `hsla(${hue}, 100%, 60%, ${alpha})`;
+                            canvasCtx.stroke();
                         }
                     }
 
-                    // 4. 描画 (手首の点)
-                    const x = hand2D.x * canvasElement.width;
-                    const y = hand2D.y * canvasElement.height;
+                    // --- 描画2: 肩のマーカー (Anchor) ---
+                    const sx = shoulder2D.x * canvasElement.width;
+                    const sy = shoulder2D.y * canvasElement.height;
+                    
+                    // 外側のリング
                     canvasCtx.beginPath();
-                    canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
-                    // リーチ中は赤、戻ったら青
-                    canvasCtx.fillStyle = isReaching ? "#ff3366" : "#00ffcc";
+                    canvasCtx.arc(sx, sy, 15, 0, 2 * Math.PI);
+                    canvasCtx.lineWidth = 3;
+                    canvasCtx.strokeStyle = "#FF9900"; // オレンジ
+                    canvasCtx.stroke();
+                    // 中心の点
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(sx, sy, 5, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = "#FF9900";
                     canvasCtx.fill();
+                    // ラベル
+                    canvasCtx.fillStyle = "#FF9900";
+                    canvasCtx.font = "12px Arial";
+                    canvasCtx.fillText("Shoulder", sx + 20, sy);
 
+                    // --- 描画3: 手のマーカー (Mover) ---
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(px, py, 10, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = isReaching ? "#FF0055" : "#00FFFF"; // リーチ中はピンク、通常はシアン
+                    canvasCtx.fill();
+                    // 白い枠線で目立たせる
+                    canvasCtx.strokeStyle = "#fff";
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.stroke();
+
+                    // 更新用変数
                     lastWrist = hand3D;
                     lastTime = currentTime;
                 }
