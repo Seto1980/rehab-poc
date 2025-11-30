@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Muscle Mapping Prototype</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <style>
+        body { margin: 0; background: #333; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: sans-serif; }
+        .container { position: relative; width: 1280px; height: 720px; }
+        video { position: absolute; width: 100%; height: 100%; transform: scaleX(-1); display: none; } /* 映像はCanvasに描くので隠す */
+        canvas { position: absolute; width: 100%; height: 100%; transform: scaleX(-1); } /* 鏡像表示 */
+        .status { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 10px; z-index: 10; transform: scaleX(1); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <video id="input_video"></video>
+    <canvas id="output_canvas" width="1280" height="720"></canvas>
+    <div class="status">
+        <h3>AI Muscle Mapper v0.1</h3>
+        <p>上腕二頭筋のテスト</p>
+        <p>角度: <span id="angle_val">--</span>°</p>
+        <p>状態: <span id="muscle_state">--</span></p>
+    </div>
+</div>
+
+<script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const angleDisplay = document.getElementById('angle_val');
+    const stateDisplay = document.getElementById('muscle_state');
+
+    // --------------------------------------------------
+    // 1. 筋肉を描画する関数（ここがキモです）
+    // --------------------------------------------------
+    function drawMuscle(ctx, start, end, thickness, contractionLevel, colorBase) {
+        // start: 起始（肩）, end: 停止（肘）
+        
+        // 2点間の距離と角度を計算
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+
+        // 筋肉の中心点（筋腹）の位置計算
+        const midX = (start.x + end.x) / 2;
+        const midY = (start.y + end.y) / 2;
+
+        // 収縮レベル(0.0-1.0)に応じて膨らみを変える
+        // 収縮してるほど太く(bulge大きく)、距離は短くなる（AI座標依存なので距離は自動）
+        const bulge = thickness * (1 + contractionLevel * 1.5); 
+
+        // 筋肉の「山」を作るための制御点計算（ベクトルを90度回転させてずらす）
+        const offsetX = -Math.sin(angle) * bulge;
+        const offsetY = Math.cos(angle) * bulge;
+
+        const controlX_outer = midX + offsetX;
+        const controlY_outer = midY + offsetY;
+        
+        // 内側（骨側）はあまり膨らまない
+        const controlX_inner = midX - (offsetX * 0.3);
+        const controlY_inner = midY - (offsetY * 0.3);
+
+        ctx.beginPath();
+        
+        // 筋肉のシェイプを描く（二次元的な「紡錘形」）
+        ctx.moveTo(start.x, start.y);
+        ctx.quadraticCurveTo(controlX_outer, controlY_outer, end.x, end.y); // 外側のカーブ
+        ctx.quadraticCurveTo(controlX_inner, controlY_inner, start.x, start.y); // 内側のカーブ
+        
+        ctx.closePath();
+
+        // 色の決定：収縮するほど赤く濃くする
+        // base: [255, 100, 100] のような配列
+        const alpha = 0.6 + (contractionLevel * 0.3); // 透過度
+        const r = colorBase[0];
+        const g = colorBase[1] - (contractionLevel * 50); // 収縮すると緑成分を減らして赤強調
+        const b = colorBase[2] - (contractionLevel * 50);
+
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        ctx.fill();
+        
+        // 輪郭線
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 1.0)`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // --------------------------------------------------
+    // 2. 角度計算ヘルパー
+    // --------------------------------------------------
+    function calculateAngle(a, b, c) {
+        const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if (angle > 180.0) angle = 360 - angle;
+        return angle;
+    }
+
+    // --------------------------------------------------
+    // 3. MediaPipe 結果処理ループ
+    // --------------------------------------------------
+    function onResults(results) {
+        // キャンバスのリセットと映像描画
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.poseLandmarks) {
+            const lm = results.poseLandmarks;
+
+            // 必要なランドマークの取得（右腕の例：12肩, 14肘, 16手首）
+            // 実際は左右判定が必要ですが、まずはシンプルに右腕(画面向かって左)でテスト
+            // ユーザーから見て鏡像なので、自分の右腕を動かしてください
+            const shoulder = { x: lm[12].x * canvasElement.width, y: lm[12].y * canvasElement.height };
+            const elbow = { x: lm[14].x * canvasElement.width, y: lm[14].y * canvasElement.height };
+            const wrist = { x: lm[16].x * canvasElement.width, y: lm[16].y * canvasElement.height };
+
+            // 肘の角度計算
+            const angle = calculateAngle(shoulder, elbow, wrist);
+            angleDisplay.innerText = Math.round(angle);
+
+            // 収縮レベルの計算 (160度=伸びてる=0, 30度=曲げてる=1)
+            let contraction = (160 - angle) / 130;
+            if (contraction < 0) contraction = 0;
+            if (contraction > 1) contraction = 1;
+
+            stateDisplay.innerText = contraction > 0.5 ? "収縮 (Active)" : "弛緩 (Relax)";
+
+            // --- 筋肉の描画 ---
+            
+            // 上腕二頭筋 (Biceps)
+            // 起始：肩より少し下、停止：肘より少し手首寄り
+            // 座標を微調整して「骨の上」に乗っているように見せる
+            drawMuscle(
+                canvasCtx, 
+                shoulder, // 起始
+                elbow,    // 停止（実際は前腕橈骨粗面ですが、簡易的に肘へ）
+                30,       // 基本の太さ
+                contraction, // 収縮度
+                [255, 150, 150] // 色（ピンク〜赤）
+            );
+
+            // 骨格のガイド線（デバッグ用：不要なら消してください）
+            canvasCtx.strokeStyle = 'white';
+            canvasCtx.lineWidth = 2;
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(shoulder.x, shoulder.y);
+            canvasCtx.lineTo(elbow.x, elbow.y);
+            canvasCtx.lineTo(wrist.x, wrist.y);
+            canvasCtx.stroke();
+        }
+        canvasCtx.restore();
+    }
+
+    // --------------------------------------------------
+    // 4. MediaPipe 初期化
+    // --------------------------------------------------
+    const pose = new Pose({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+    }});
+    pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    pose.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await pose.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720
+    });
+    camera.start();
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Muscle Map AR v0.2</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        .container { position: relative; width: 100vw; height: 100vh; }
+        video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .status { 
+            position: absolute; bottom: 20px; left: 20px; right: 20px; 
+            background: rgba(0,0,0,0.6); color: white; padding: 15px; 
+            border-radius: 10px; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <video id="input_video" playsinline></video>
+    <canvas id="output_canvas"></canvas>
+    <div class="status">
+        <h3>Muscle Map v0.2</h3>
+        <p>検出: <span id="side_val">--</span></p>
+        <p>肘角度: <span id="angle_val">--</span>°</p>
+    </div>
+</div>
+
+<script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const angleDisplay = document.getElementById('angle_val');
+    const sideDisplay = document.getElementById('side_val');
+
+    // スムージング用の変数を保持
+    let prevLandmarks = null;
+    const SMOOTHING_FACTOR = 0.5; // 0.1(遅い/滑らか) 〜 1.0(速い/ブレる)
+
+    function resizeCanvas() {
+        canvasElement.width = window.innerWidth;
+        canvasElement.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // 2点間の距離
+    function getDistance(a, b) {
+        return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+    }
+
+    // スムージング処理
+    function smoothLandmarks(newLm) {
+        if (!prevLandmarks) {
+            prevLandmarks = newLm;
+            return newLm;
+        }
+        for (let i = 0; i < newLm.length; i++) {
+            prevLandmarks[i].x = prevLandmarks[i].x * (1 - SMOOTHING_FACTOR) + newLm[i].x * SMOOTHING_FACTOR;
+            prevLandmarks[i].y = prevLandmarks[i].y * (1 - SMOOTHING_FACTOR) + newLm[i].y * SMOOTHING_FACTOR;
+            prevLandmarks[i].z = prevLandmarks[i].z * (1 - SMOOTHING_FACTOR) + newLm[i].z * SMOOTHING_FACTOR;
+        }
+        return prevLandmarks;
+    }
+
+    // 3点の角度（内角 0-180）を計算
+    function calculateInnerAngle(a, b, c) {
+        const ab = { x: a.x - b.x, y: a.y - b.y };
+        const cb = { x: c.x - b.x, y: c.y - b.y };
+        const dot = ab.x * cb.x + ab.y * cb.y;
+        const magAB = Math.sqrt(ab.x * ab.x + ab.y * ab.y);
+        const magCB = Math.sqrt(cb.x * cb.x + cb.y * cb.y);
+        const angleRad = Math.acos(dot / (magAB * magCB));
+        return angleRad * (180 / Math.PI);
+    }
+
+    // 筋肉描画
+    function drawBiceps(ctx, shoulder, elbow, wrist, angle) {
+        // 1. 基本サイズ決定（上腕の長さに比例させる）
+        const armLength = getDistance(shoulder, elbow);
+        const baseThickness = armLength * 0.25; // 上腕長の25%を太さとする
+
+        // 2. 収縮度 (160度=0, 50度=1.0)
+        let contraction = (160 - angle) / 110; 
+        if (contraction < 0) contraction = 0;
+        if (contraction > 1) contraction = 1;
+
+        // 3. 膨らむ方向の計算
+        // 二頭筋は常に「肘の内角側」にあります。
+        // 肩→肘、手首→肘 のベクトルの中間角（二等分線）を求めます。
+        const angleShoulder = Math.atan2(shoulder.y - elbow.y, shoulder.x - elbow.x);
+        const angleWrist = Math.atan2(wrist.y - elbow.y, wrist.x - elbow.x);
+        
+        // 2つの角度のちょうど真ん中（内側）
+        let midAngle = (angleShoulder + angleWrist) / 2;
+        
+        // 角度差が180度を超えて計算される場合の補正
+        if (Math.abs(angleShoulder - angleWrist) > Math.PI) {
+            midAngle += Math.PI;
+        }
+
+        // 4. 制御点の計算
+        const bulgeAmount = baseThickness * (0.8 + contraction * 1.0); // 収縮で膨らむ
+        
+        // 筋肉の中心位置（上腕の中間より少し肩寄り）
+        const midX = shoulder.x * 0.4 + elbow.x * 0.6;
+        const midY = shoulder.y * 0.4 + elbow.y * 0.6;
+
+        // 膨らみの頂点座標
+        const peakX = midX + Math.cos(midAngle) * bulgeAmount;
+        const peakY = midY + Math.sin(midAngle) * bulgeAmount;
+
+        // 内側（骨側）のへこみ（少しだけ逆方向へ）
+        const innerX = midX - Math.cos(midAngle) * (baseThickness * 0.2);
+        const innerY = midY - Math.sin(midAngle) * (baseThickness * 0.2);
+
+        // 描画
+        ctx.beginPath();
+        ctx.moveTo(shoulder.x, shoulder.y);
+        // 外側のカーブ（膨らみ）
+        ctx.quadraticCurveTo(peakX, peakY, elbow.x, elbow.y);
+        // 内側のカーブ（直線に近い）
+        ctx.quadraticCurveTo(innerX, innerY, shoulder.x, shoulder.y);
+        ctx.closePath();
+
+        // 色：収縮すると赤く
+        const r = 255;
+        const g = 100 - (contraction * 80);
+        const b = 100 - (contraction * 80);
+        
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.6)`;
+        ctx.fill();
+        
+        // デバッグ用：ワイヤーフレーム
+        // ctx.lineWidth = 2;
+        // ctx.strokeStyle = "white";
+        // ctx.stroke();
+    }
+
+    function onResults(results) {
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.poseLandmarks) {
+            let lm = results.poseLandmarks;
+            
+            // スムージング適用
+            lm = smoothLandmarks(lm);
+
+            const w = canvasElement.width;
+            const h = canvasElement.height;
+
+            // 左右どちらの腕を使うか判定
+            // 視認性(visibility)が高い方を選択
+            const rightVis = (lm[12].visibility + lm[14].visibility + lm[16].visibility) / 3;
+            const leftVis = (lm[11].visibility + lm[13].visibility + lm[15].visibility) / 3;
+
+            let s, e, wr, sideName;
+
+            // MediaPipeは鏡像設定なしの場合、右手は画面左側(Right indices)
+            // 自撮り(鏡像)の場合、自分の右手は画面右側だが、データ上はLeft(11,13,15)として扱われることがあるため
+            // ここでは単純に「visibilityが高い方」のIDセットを使います。
+            
+            if (rightVis > leftVis) {
+                // 右腕（データ上のRight）
+                s = {x: lm[12].x * w, y: lm[12].y * h}; // 肩
+                e = {x: lm[14].x * w, y: lm[14].y * h}; // 肘
+                wr = {x: lm[16].x * w, y: lm[16].y * h}; // 手首
+                sideName = "Right (Data)";
+            } else {
+                // 左腕（データ上のLeft）
+                s = {x: lm[11].x * w, y: lm[11].y * h};
+                e = {x: lm[13].x * w, y: lm[13].y * h};
+                wr = {x: lm[15].x * w, y: lm[15].y * h};
+                sideName = "Left (Data)";
+            }
+
+            sideDisplay.innerText = sideName;
+
+            // 角度計算
+            const angle = calculateInnerAngle(s, e, wr);
+            angleDisplay.innerText = Math.round(angle);
+
+            // 描画
+            drawBiceps(canvasCtx, s, e, wr, angle);
+        }
+        canvasCtx.restore();
+    }
+
+    const pose = new Pose({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+    }});
+    
+    // モデルの精度設定を少し上げる
+    pose.setOptions({
+        modelComplexity: 1, 
+        smoothLandmarks: true, // MediaPipe内蔵のスムージングもON
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6
+    });
+    pose.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await pose.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720,
+        facingMode: 'user' // 自撮り用にインカメラ優先
+    });
+    camera.start();
+</script>
+</body>
+</html>
