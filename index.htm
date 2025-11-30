@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Rehab-Vis Pro v6 (2-Step Calib)</title>
+    <title>Rehab-Vis Pro v7 (Training Mode)</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -42,7 +42,7 @@
         }
         .hand-btn.active { background: #00ffcc; color: #000; box-shadow: 0 0 10px #00ffcc; }
 
-        /* マニュアル */
+        /* マニュアル (説明書) */
         #manual-modal {
             display: none; pointer-events: auto; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;
@@ -50,7 +50,7 @@
         .manual-content {
             background: #1a1a1a; margin: 40px auto; padding: 30px; width: 90%; max-width: 600px;
             border-radius: 15px; border: 1px solid #444; color: #eee; text-align: left;
-            padding-bottom: 60px;
+            padding-bottom: 40px;
         }
         .manual-badge {
             background: #00ffcc; color: #000; padding: 5px 10px; border-radius: 4px;
@@ -63,22 +63,34 @@
             border: 1px solid #ff5555; background: rgba(255,85,85,0.15); 
             padding: 15px; border-radius: 8px; font-size: 13px; color: #ffcccc; margin-top: 15px;
         }
+        /* 閉じるボタンを中央寄せ */
+        .manual-close-wrapper { text-align: center; margin-top: 30px; }
+        .retry-btn { background: #444; color: #fff; padding: 12px 30px; border-radius: 30px; border: none; cursor: pointer; font-size: 16px; }
 
         /* スタート画面 */
         #start-screen {
             pointer-events: auto; text-align: center;
             background: rgba(0,0,0,0.85); padding: 40px; border-radius: 20px; border: 1px solid #555;
+            width: 80%; max-width: 350px;
         }
         #start-btn {
             background: linear-gradient(135deg, #00ffcc, #0099aa);
             border: none; padding: 15px 50px; font-size: 20px; 
             font-weight: bold; border-radius: 50px; cursor: pointer; margin-top: 25px;
             color: #000; box-shadow: 0 0 15px rgba(0,255,204,0.3);
+            width: 100%;
         }
         #help-btn {
             margin-top: 15px; background: transparent; border: 1px solid #666; color: #aaa;
-            padding: 8px 20px; border-radius: 20px; cursor: pointer; font-size: 14px;
+            padding: 8px 20px; border-radius: 20px; cursor: pointer; font-size: 14px; width: 100%;
         }
+        /* 時間設定セレクトボックス */
+        .time-selector { margin-top: 15px; text-align: center; }
+        .time-select {
+            background: #222; color: #fff; border: 1px solid #00ffcc; 
+            padding: 10px; border-radius: 10px; font-size: 16px; width: 100px; text-align: center;
+        }
+        .time-label { font-size: 12px; color: #aaa; display: block; margin-bottom: 5px; }
 
         /* キャリブレーション画面 */
         #calibration-ui { display: none; text-align: center; background: rgba(0,0,0,0.85); padding: 30px; border-radius: 20px; border: 2px solid #ffcc00; width: 80%; max-width: 400px; }
@@ -86,6 +98,11 @@
         .calib-title { font-size: 24px; color: #ffcc00; font-weight: bold; margin-bottom: 10px; }
         .calib-desc { font-size: 16px; color: #fff; line-height: 1.5; }
         .calib-timer { font-size: 60px; color: #fff; font-weight: bold; margin-top: 15px; }
+
+        /* 準備中 (Ready) */
+        #ready-ui { display: none; text-align: center; }
+        .ready-title { font-size: 30px; color: #fff; font-weight: bold; text-shadow: 0 0 10px #000; }
+        .ready-count { font-size: 100px; color: #00ffcc; font-weight: bold; }
 
         /* 計測中 */
         #recording-ui { display: none; text-align: center; width: 100%; }
@@ -110,9 +127,6 @@
         .res-box { background: #333; padding: 10px; border-radius: 8px; }
         .res-label { font-size: 10px; color: #aaa; margin-bottom: 5px; }
         .res-big { font-size: 24px; font-weight: bold; color: #fff; }
-        .retry-btn { background: #444; color: #fff; padding: 12px 30px; border-radius: 30px; border: none; cursor: pointer; font-size: 16px; margin-top: 10px; }
-        
-        .debug-state { font-size: 12px; color: #555; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -126,50 +140,65 @@
     <div id="manual-modal">
         <div class="manual-content">
             <span class="manual-badge">認定作業療法士監修</span>
-            <h2 style="color:#fff; margin-top:5px; border-bottom:1px solid #555; padding-bottom:15px;">取扱説明書 (v6)</h2>
+            <h2 style="color:#fff; margin-top:5px; border-bottom:1px solid #555; padding-bottom:15px;">取扱説明書 (v7)</h2>
             
             <div class="manual-h3">1. 目的 (Purpose)</div>
             <p class="manual-p">
-                本アプリは、リハビリテーションにおける上肢の「リーチ範囲（可動域）」を個別に測定し、その範囲内での運動パフォーマンス（回数、速度）を評価します。<br>
-                「開始位置」と「最大位置」の両方を最初に記憶することで、信頼性の高いカウントを行います。
+                本アプリは、リハビリテーションにおける上肢リーチ動作を可視化・評価します。<br>
+                「開始位置」と「最大位置」を記憶し、<strong>空間にターゲットを表示</strong>することで、視覚的なフィードバックを与えながら訓練を行えます。
             </p>
 
-            <div class="manual-h3">2. 正しい使い方 (2段階設定)</div>
-            <p class="manual-p">測定を開始すると、まず<strong>2回</strong>の準備時間があります。</p>
-
-            <p class="manual-p"><strong>STEP 1: ホーム位置の登録</strong><br>
-            最初の5秒で、<span style="color:#00ffcc;">手を膝の上（または机の手前）に置いてリラックスしてください。</span><br>
-            これが「0%」の基準になります。</p>
+            <div class="manual-h3">2. 使い方 (Training Flow)</div>
             
-            <p class="manual-p"><strong>STEP 2: 最大リーチの登録</strong><br>
-            次の5秒で、<span style="color:#ffcc00;">腕を限界まで遠くに伸ばしてください。</span><br>
-            これが「100%」の基準になります。</p>
+            <p class="manual-p"><strong>STEP 1: 設定</strong><br>
+            訓練時間（10秒〜60秒）を選択してスタートします。</p>
 
-            <p class="manual-p"><strong>STEP 3: トレーニング開始</strong><br>
-            設定した「0%〜100%」の範囲を使って計測します。<br>
-            ・<span style="color:#00ffcc">80%</span>まで伸ばすと「リーチ」<br>
-            ・<span style="color:#ff3366">20%</span>まで戻すと「1回」とカウント。</p>
+            <p class="manual-p"><strong>STEP 2: ホーム位置登録 (5秒)</strong><br>
+            手を<span style="color:#00ffcc;">「膝の上」や「手元」</span>に置いて静止してください。<br>
+            ここに<strong>青いリング</strong>が設定されます。</p>
+            
+            <p class="manual-p"><strong>STEP 3: 最大リーチ登録 (5秒)</strong><br>
+            腕を<span style="color:#ffcc00;">「限界まで」</span>遠くに伸ばしてください。<br>
+            ここに<strong>黄色いリング</strong>が設定されます。</p>
 
-            <div class="manual-h3">3. デメリット・注意点</div>
+            <p class="manual-p"><strong>STEP 4: 待機時間 (5秒)</strong><br>
+            測定前に5秒間の休憩が入ります。開始位置に戻って準備してください。</p>
+
+            <p class="manual-p"><strong>STEP 5: トレーニング開始</strong><br>
+            画面上のリングを目指して動かします。<br>
+            ・黄色いリングに近づくと「リーチ」<br>
+            ・青いリングに戻ると「1回」とカウント。</p>
+
+            <div class="manual-h3">3. 注意点 (Notes)</div>
             <div class="manual-warn">
                 <ul>
-                    <li><strong>奥行き計測の限界:</strong> 単眼カメラのため、奥行きの絶対距離(cm)には誤差があります。本アプリは「あなたのホーム位置」と「あなたの最大位置」の差分を利用することで、この誤差を最小限に抑えています。</li>
-                    <li><strong>認識エラー:</strong> 最初の設定（Step1, Step2）で正しくポーズを取らないと、その後のカウントが反応しません。</li>
-                    <li><strong>環境:</strong> 逆光や、体と同系色の服は避けてください。</li>
+                    <li><strong>肩の認識:</strong> 画面に肩のマーカーは出ませんが、AIは内部で肩の位置を見ています。体ごと前に倒れ込むと正確なリーチ（腕の伸び）が測れないため、体幹は起こしたまま腕を伸ばしてください。</li>
+                    <li><strong>訓練モード:</strong> 無理のない時間設定で行ってください。</li>
                 </ul>
             </div>
 
-            <button class="retry-btn" onclick="document.getElementById('manual-modal').style.display='none'">閉じて計測へ</button>
+            <div class="manual-close-wrapper">
+                <button class="retry-btn" onclick="document.getElementById('manual-modal').style.display='none'">閉じて計測へ</button>
+            </div>
         </div>
     </div>
 
     <div class="ui-layer">
         <div id="start-screen">
             <h2 style="color:#fff; margin-bottom: 5px;">Rehab Analytics Pro</h2>
-            <div style="color:#aaa; font-size:14px;">Reliable 2-Step Calibration System</div>
+            <div style="color:#aaa; font-size:14px;">Training Mode with Visual Targets</div>
             
+            <div class="time-selector">
+                <label class="time-label">訓練時間 (Duration)</label>
+                <select id="time-select" class="time-select">
+                    <option value="10">10秒</option>
+                    <option value="20">20秒</option>
+                    <option value="30">30秒</option>
+                    <option value="60">60秒</option>
+                </select>
+            </div>
+
             <button id="start-btn" onclick="startCalibrationStep1()">測定開始</button>
-            <br>
             <button id="help-btn" onclick="document.getElementById('manual-modal').style.display='block'">説明書を見る</button>
         </div>
 
@@ -177,10 +206,15 @@
             <div class="calib-step" id="calib-step-label">STEP 1/2</div>
             <div class="calib-title" id="calib-title">🏠 ホーム位置設定</div>
             <div class="calib-desc" id="calib-desc">
-                手を<strong>「膝の上」</strong>や<strong>「手元」</strong>に置いて<br>
-                リラックスしてください。（0%設定）
+                手を<strong>「手元」</strong>に置いて<br>
+                青いリングを設定します。
             </div>
             <div class="calib-timer" id="calib-timer">5</div>
+        </div>
+
+        <div id="ready-ui">
+            <div class="ready-title">Get Ready...</div>
+            <div class="ready-count" id="ready-count">5</div>
         </div>
 
         <div id="recording-ui">
@@ -201,7 +235,6 @@
                     <div class="rt-sub-val"><span id="rt-speed">0.0</span> <span style="font-size:10px">m/s</span></div>
                 </div>
             </div>
-            <div class="debug-state" id="debug-msg">State: Active</div>
         </div>
 
         <div id="result-ui">
@@ -246,31 +279,35 @@
         }
 
         // --- 変数 (Variables) ---
-        let appState = 'idle'; // idle, calib1, calib2, recording, result
+        let appState = 'idle'; // idle, calib1, calib2, pre-record, recording, result
         let lastTime = 0;
         let lastWrist = null;
+        let targetDuration = 10; // デフォルト10秒
         
-        // ★ 2段階キャリブレーション用 ★
-        let calibMinDist = 0; // ホーム位置(0%)
-        let calibMaxDist = 0; // 最大リーチ(100%)
-        let calibRange = 1;   // 可動範囲 (Max - Min)
+        // キャリブレーション用
+        let calibMinDist = 0; 
+        let calibMaxDist = 0; 
+        let calibRange = 1;   
+
+        // ★ 視覚的マーカー用座標 (画面上のx,y) ★
+        let homePos2D = null; // {x, y}
+        let maxPos2D = null;  // {x, y}
 
         // 計測データ
         let sessionData = { totalEnergy: 0, maxPercent: 0, maxSpeed: 0, moveCount: 0 };
         
-        // カウント閾値 (範囲が正規化されたので、明確な％で指定可能)
+        // カウント閾値
         let isReaching = false; 
-        const THRESHOLD_HIGH = 0.80; // 80%まで伸びたらリーチ
-        const THRESHOLD_LOW = 0.20;  // 20%まで戻ったらカウント
+        const THRESHOLD_HIGH = 0.80; 
+        const THRESHOLD_LOW = 0.20;  
 
         // UI
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const debugMsg = document.getElementById('debug-msg');
         let pathHistory = [];
 
-        // グラフ設定 (0-120%)
+        // グラフ
         const ctxChart = document.getElementById('chart_canvas').getContext('2d');
         let chart = new Chart(ctxChart, {
             type: 'line',
@@ -278,36 +315,36 @@
                 labels: Array(60).fill(''),
                 datasets: [{ 
                     data: Array(60).fill(0), 
-                    borderColor: '#00ffcc', 
-                    backgroundColor: 'rgba(0,255,204,0.1)', 
+                    borderColor: '#00ffcc', backgroundColor: 'rgba(0,255,204,0.1)', 
                     fill: true, tension: 0.3, pointRadius: 0 
                 }]
             },
             options: { 
                 responsive: true, maintainAspectRatio: false, animation: false,
-                scales: { 
-                    y: { display: true, min: 0, max: 120, grid: { color: '#333'} }, 
-                    x: { display: false } 
-                },
+                scales: { y: { display: true, min: 0, max: 120, grid: { color: '#333'} }, x: { display: false } },
                 plugins: { legend: { display: false } }
             }
         });
 
-        // --- シーケンス ---
+        // --- シーケンス制御 ---
         
-        // STEP 1: ホーム位置 (Min)
+        // STEP 1: ホーム位置設定
         function startCalibrationStep1() {
+            // 時間設定を取得
+            const select = document.getElementById('time-select');
+            targetDuration = parseInt(select.value, 10);
+
             appState = 'calib1';
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('calibration-ui').style.display = 'block';
             
             // UI更新
             document.getElementById('calib-step-label').innerText = "STEP 1/2";
-            document.getElementById('calib-title').innerText = "🏠 ホーム位置設定";
-            document.getElementById('calib-desc').innerHTML = "手を<strong>「膝の上」</strong>や<strong>「手元」</strong>に置いて<br>リラックスしてください。(0%)";
+            document.getElementById('calib-title').innerText = "🏠 ホーム位置 (青)";
+            document.getElementById('calib-desc').innerHTML = "手を<strong>手元</strong>に置いてください。<br>ここがスタート地点です。";
             document.getElementById('calib-title').style.color = "#00ffcc";
 
-            calibMinDist = 10.0; // 初期化（大きな値）
+            calibMinDist = 10.0;
             let count = 5;
             document.getElementById('calib-timer').innerText = count;
 
@@ -322,17 +359,16 @@
             }, 1000);
         }
 
-        // STEP 2: 最大リーチ (Max)
+        // STEP 2: 最大リーチ設定
         function startCalibrationStep2() {
             appState = 'calib2';
             
-            // UI更新
             document.getElementById('calib-step-label').innerText = "STEP 2/2";
-            document.getElementById('calib-title').innerText = "📏 最大リーチ設定";
-            document.getElementById('calib-desc').innerHTML = "腕を<strong>「限界まで」</strong>遠くに<br>伸ばしてください！(100%)";
+            document.getElementById('calib-title').innerText = "📏 最大リーチ (黄)";
+            document.getElementById('calib-desc').innerHTML = "腕を<strong>限界まで</strong>伸ばしてください。<br>ここがゴール地点です。";
             document.getElementById('calib-title').style.color = "#ffcc00";
 
-            calibMaxDist = 0; // 初期化
+            calibMaxDist = 0; 
             let count = 5;
             document.getElementById('calib-timer').innerText = count;
 
@@ -343,24 +379,46 @@
                 } else {
                     clearInterval(cTimer);
                     
-                    // 範囲計算とエラーチェック
+                    // 範囲計算
                     calibRange = calibMaxDist - calibMinDist;
-                    if (calibRange < 0.1) calibRange = 0.3; // 差が小さすぎる場合の安全策
+                    if (calibRange < 0.1) calibRange = 0.3; 
                     
                     document.getElementById('calibration-ui').style.display = 'none';
+                    startReadyPhase(); // ★新設: 待機フェーズへ
+                }
+            }, 1000);
+        }
+
+        // STEP 2.5: 待機フェーズ (5秒カウント)
+        function startReadyPhase() {
+            appState = 'pre-record';
+            document.getElementById('ready-ui').style.display = 'block';
+            
+            let count = 5;
+            document.getElementById('ready-count').innerText = count;
+            
+            const cTimer = setInterval(() => {
+                count--;
+                if(count > 0) {
+                    document.getElementById('ready-count').innerText = count;
+                } else {
+                    clearInterval(cTimer);
+                    document.getElementById('ready-ui').style.display = 'none';
                     startMeasurement();
                 }
             }, 1000);
         }
 
-        // STEP 3: 計測開始
+        // STEP 3: 本番計測
         function startMeasurement() {
             appState = 'recording';
             document.getElementById('recording-ui').style.display = 'block';
             sessionData = { totalEnergy: 0, maxPercent: 0, maxSpeed: 0, moveCount: 0 };
             isReaching = false;
 
-            let timeLeft = 10.0;
+            let timeLeft = targetDuration; // 設定した時間
+            document.getElementById('timer-val').innerText = timeLeft.toFixed(1);
+
             const timer = setInterval(() => {
                 timeLeft -= 0.1;
                 if(timeLeft < 0) timeLeft = 0;
@@ -384,7 +442,7 @@
             document.getElementById('res-energy').innerText = sessionData.totalEnergy.toFixed(1);
         }
 
-        // --- MediaPipe 処理 ---
+        // --- MediaPipe Loop ---
         function onResults(results) {
             canvasElement.width = window.innerWidth;
             canvasElement.height = window.innerHeight;
@@ -394,70 +452,57 @@
                 const hand3D = results.poseWorldLandmarks[targetHand];
                 const shoulder3D = results.poseWorldLandmarks[targetShoulder];
                 const hand2D = results.poseLandmarks[targetHand];
-                const shoulder2D = results.poseLandmarks[targetShoulder];
 
                 if (hand3D && shoulder3D) {
-                    // 距離計算 (絶対距離)
+                    // 距離計算 (内部ロジック用)
                     const dist = Math.sqrt(
                         Math.pow(hand3D.x - shoulder3D.x, 2) +
                         Math.pow(hand3D.y - shoulder3D.y, 2) +
                         Math.pow(hand3D.z - shoulder3D.z, 2)
                     );
 
-                    // --- 状態ごとの処理 ---
-
-                    // 1. ホーム位置計測 (最小値を探す)
+                    // --- 状態処理 ---
+                    // 1. ホーム設定
                     if (appState === 'calib1') {
-                        // 安定させるため、期間中の平均を取りたいが、簡易的に「最後に近い値」を採用
-                        // ここでは「期間中の最小値」ではなく「現在の値」を更新し続ける（リラックスしているので）
                         calibMinDist = dist; 
+                        homePos2D = { x: hand2D.x, y: hand2D.y }; // ★画面位置を記憶
                     }
-                    
-                    // 2. 最大リーチ計測 (最大値を探す)
+                    // 2. 最大リーチ設定
                     else if (appState === 'calib2') {
-                        if (dist > calibMaxDist) calibMaxDist = dist;
+                        if (dist > calibMaxDist) {
+                            calibMaxDist = dist;
+                            maxPos2D = { x: hand2D.x, y: hand2D.y }; // ★画面位置を記憶
+                        }
                     }
-
-                    // 3. 本番計測
+                    // 3. 計測中
                     else if (appState === 'recording') {
-                        // ★核心ロジック: 範囲に対する割合を計算
-                        // (現在値 - 最小値) / (最大値 - 最小値)
                         let rawRatio = (dist - calibMinDist) / calibRange;
-                        
-                        // 外れ値補正 (0%以下や120%以上は丸める)
                         if (rawRatio < 0) rawRatio = 0;
                         if (rawRatio > 1.2) rawRatio = 1.2;
-
                         const percent = rawRatio * 100;
 
-                        // UI & Graph
+                        // UI更新
                         document.getElementById('rt-percent').innerText = percent.toFixed(0);
                         const data = chart.data.datasets[0].data;
                         data.shift(); data.push(percent); chart.update();
 
                         if(percent > sessionData.maxPercent) sessionData.maxPercent = percent;
 
-                        // ★ カウント判定 (正規化された％で判定するので確実)
-                        if (!isReaching && rawRatio > THRESHOLD_HIGH) { // 80%超え
+                        // カウント
+                        if (!isReaching && rawRatio > THRESHOLD_HIGH) { 
                             isReaching = true;
-                            debugMsg.innerText = "Reaching (>80%)";
-                        } else if (isReaching && rawRatio < THRESHOLD_LOW) { // 20%未満
+                        } else if (isReaching && rawRatio < THRESHOLD_LOW) { 
                             isReaching = false;
                             sessionData.moveCount++;
                             document.getElementById('rt-count').innerText = sessionData.moveCount;
-                            debugMsg.innerText = "Return (<20%) -> Count!";
                         }
 
-                        // Speed & Energy
+                        // Speed
                         const currentTime = Date.now();
                         if (lastWrist && lastTime > 0) {
                             const dt = (currentTime - lastTime) / 1000; 
                             if (dt > 0) {
-                                const moveDist = Math.sqrt(
-                                    Math.pow(hand3D.x - lastWrist.x, 2) +
-                                    Math.pow(hand3D.y - lastWrist.y, 2) +
-                                    Math.pow(hand3D.z - lastWrist.z, 2)
-                                );
+                                const moveDist = Math.sqrt(Math.pow(hand3D.x - lastWrist.x, 2) + Math.pow(hand3D.y - lastWrist.y, 2) + Math.pow(hand3D.z - lastWrist.z, 2));
                                 let speed = moveDist / dt; 
                                 if (speed < 20) {
                                     sessionData.totalEnergy += (0.5 * speed * speed);
@@ -468,13 +513,17 @@
                         }
                     }
 
-                    // 描画
+                    // --- 描画 (Visuals) ---
                     const px = hand2D.x * canvasElement.width;
                     const py = hand2D.y * canvasElement.height;
-                    const sx = shoulder2D.x * canvasElement.width;
-                    const sy = shoulder2D.y * canvasElement.height;
 
-                    drawMarker(sx, sy, "#00FFFF", "Shoulder"); 
+                    // ★固定マーカーの表示 (Recording中)
+                    if (appState === 'recording' || appState === 'pre-record') {
+                        if (homePos2D) drawRing(homePos2D.x * canvasElement.width, homePos2D.y * canvasElement.height, "#00FFFF", "HOME");
+                        if (maxPos2D) drawRing(maxPos2D.x * canvasElement.width, maxPos2D.y * canvasElement.height, "#FFCC00", "MAX");
+                    }
+
+                    // 現在の手のマーカー
                     drawMarker(px, py, isReaching ? "#FF3366" : "#00FFFF", "Hand");
 
                     lastWrist = hand3D;
@@ -483,6 +532,7 @@
             }
         }
 
+        // 手のマーカー
         function drawMarker(x, y, color, label) {
             canvasCtx.beginPath();
             canvasCtx.arc(x, y, 12, 0, 2 * Math.PI);
@@ -491,11 +541,20 @@
             canvasCtx.strokeStyle = "#fff";
             canvasCtx.lineWidth = 3;
             canvasCtx.stroke();
-            if(label) {
-                canvasCtx.fillStyle = "#fff";
-                canvasCtx.font = "bold 12px Arial";
-                canvasCtx.fillText(label, x + 18, y + 4);
-            }
+        }
+
+        // 固定リング描画用
+        function drawRing(x, y, color, label) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(x, y, 25, 0, 2 * Math.PI); // 大きめのリング
+            canvasCtx.strokeStyle = color;
+            canvasCtx.lineWidth = 4;
+            canvasCtx.stroke();
+            
+            canvasCtx.fillStyle = color;
+            canvasCtx.font = "bold 14px Arial";
+            canvasCtx.textAlign = "center";
+            canvasCtx.fillText(label, x, y - 35);
         }
 
         const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
